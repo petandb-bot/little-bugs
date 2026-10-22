@@ -1,4 +1,4 @@
-/* LITTLE BUGS v0.4 — 直角・ドット・毒々しい少数色の初期ファミコン風筐体 */
+/* LITTLE BUGS v0.5 — 直角・ドット・毒々しい少数色の初期ファミコン風筐体 */
 :root{--ink:#1B122C;--paper:#F6EED9;--cream:#E4DFD4;--purple:#4C2A6A;--pink:#F15696;--lime:#D5FA56;--orange:#F3B34D;--mint:#91ECD1;--screen:#17102D;font-family:'Press Start 2P',ui-monospace,monospace;font-synthesis:none;-webkit-font-smoothing:none;text-rendering:optimizeSpeed}
 *{box-sizing:border-box}
 html{background:var(--ink);min-height:100%;}

@@ -1,9 +1,9 @@
 {
   "name": "little-bugs-voice-pets",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
-  "description": "Toxic 8-bit voice mutations, fast speech loops and mantras, GROOVE accompaniment, and pixel creatures.",
+  "description": "Pocket rhythm sequencer, audible hip-hop GROOVE and minimal pixel bugs.",
   "scripts": {
     "test": "node ./tests/engine-smoke.mjs"
   }

@@ -1,253 +1,304 @@
 /**
- * LITTLE BUGS v0.4 — VOICE-FIRST RITUAL MACHINE
- * 声の明瞭な断片を必ず残しながら、早口ラップ・呪文・詠唱・歌うループを生成する。
- * 伴奏は独立した低音量レイヤーであり、GROOVE OFFでも声だけの拍節が成立する。
- * Web Audio の再生レート変更はフォルマント維持を行わないため、低速化は最小限に制限。
+ * LITTLE BUGS v0.5 — POCKET RHYTHM ENGINE
+ *
+ * 主役は録音された声。シーケンスの強拍・裏拍・休符・反復を先に設計してから、
+ * そこへ声の断片を当てはめる。エフェクトが変わっても拍の骨格は壊さない。
+ * GROOVE は声とは別の打楽器トラックとして生成し、再生中も切り替えられる。
+ * 配列の処理は端末内だけで行い、録音データをネットワークへ送信しない。
  */
-export const RATE=44100;
-const TAU=2*Math.PI;
-const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+export const RATE = 44100;
+const TAU = Math.PI * 2;
+const clamp = (x,a,b) => Math.max(a,Math.min(b,x));
 const lerp=(a,b,t)=>a+(b-a)*t;
-const pick=(rng,arr)=>arr[Math.min(arr.length-1,Math.floor(rng()*arr.length))];
-const rand=(rng,a,b)=>a+rng()*(b-a);
+const choose=(rng,arr)=>arr[Math.min(arr.length-1,Math.floor(rng()*arr.length))];
 const wrap=(x,n)=>(x%n+n)%n;
-export function mulberry32(seed){let x=seed>>>0;return()=>{x=(x+0x6d2b79f5)|0;let t=Math.imul(x^(x>>>15),1|x);t^=t+Math.imul(t^(t>>>7),61|t);return ((t^(t>>>14))>>>0)/4294967296;};}
+const rand=(rng,a,b)=>a+(b-a)*rng();
+export function mulberry32(seed) { let x=seed>>>0;return()=>{x=(x+0x6D2B79F5)|0;let t=Math.imul(x^(x>>>15),1|x);t^=t+Math.imul(t^(t>>>7),61|t);return ((t^(t>>>14))>>>0)/4294967296;}; }
+const allocate=n=>({left:new Float32Array(n),right:new Float32Array(n)});
 
-/** マイクの直流・低域ノイズを抑え、声が小さいときだけ控えめに音量を持ち上げる。 */
+/** 入力のDC成分を除去し、極端に小さな声だけ穏やかにレベルを上げる。 */
 export function monoFromAudioBuffer(buffer){
-  const data=new Float32Array(buffer.length);
-  for(let c=0;c<buffer.numberOfChannels;c++){
-    const ch=buffer.getChannelData(c);
-    for(let i=0;i<data.length;i++)data[i]+=ch[i]/buffer.numberOfChannels;
-  }
-  let lp=0,dc=0,peak=0,square=0;
-  const dcCoef=1-Math.exp(-TAU*24/buffer.sampleRate);
-  for(let i=0;i<data.length;i++){
-    const s=data[i];dc+=dcCoef*(s-dc);lp+=.001*(s-lp);
-    const v=s-dc;data[i]=v;peak=Math.max(peak,Math.abs(v));square+=v*v;
-  }
-  const rms=Math.sqrt(square/Math.max(1,data.length));
-  const boost=peak>.006?Math.min(5.5,.83/peak,.19/Math.max(.002,rms)):1;
-  for(let i=0;i<data.length;i++)data[i]*=boost;
-  return {data,sampleRate:buffer.sampleRate,duration:data.length/buffer.sampleRate,peak:peak*boost,rms:rms*boost};
+  const {numberOfChannels,length,sampleRate}=buffer;
+  const data=new Float32Array(length);
+  for(let c=0;c<numberOfChannels;c++){const ch=buffer.getChannelData(c);for(let i=0;i<length;i++)data[i]+=ch[i]/numberOfChannels;}
+  let dc=0,peak=0,sumsq=0;const coefficient=1-Math.exp(-TAU*24/sampleRate);
+  for(let i=0;i<length;i++){dc+=coefficient*(data[i]-dc);data[i]-=dc;peak=Math.max(peak,Math.abs(data[i]));sumsq+=data[i]*data[i];}
+  const rms=Math.sqrt(sumsq/Math.max(1,length));
+  const gain=peak>.004?Math.min(6,.83/peak,.18/Math.max(rms,.001)):1;
+  for(let i=0;i<length;i++)data[i]*=gain;
+  return {data,sampleRate,duration:length/sampleRate,peak:peak*gain,rms:rms*gain};
 }
 
-/** 発音開始点と連続した母音を両方扱う。語句として聴ける長い断片も別途保持する。 */
+/** 14ms フレームでエネルギーとノイズ成分を観察。単一母音も扱えるように時間均等候補を追加。 */
 function analyze(input){
-  const {data,sampleRate:sr}=input,total=data.length/sr;
-  const hop=Math.max(256,Math.round(sr*.014)),levels=[];
+  const sr=input.sampleRate,data=input.data,total=data.length/sr;
+  const hop=Math.max(256,Math.round(sr*.014));const frames=[];
   for(let start=0;start<data.length;start+=hop){
-    let energy=0,count=0;
-    for(let j=start;j<Math.min(data.length,start+hop);j+=3){energy+=data[j]*data[j];count++;}
-    levels.push(Math.sqrt(energy/Math.max(1,count)));
+    let power=0,cross=0,count=0,previous=data[start]||0;
+    for(let j=start;j<Math.min(data.length,start+hop);j+=2){
+      const v=data[j];power+=v*v;if(v*previous<0)cross++;previous=v;count++;
+    }
+    frames.push({time:start/sr,rms:Math.sqrt(power/Math.max(1,count)),zcr:cross/Math.max(1,count)});
   }
-  const sorted=levels.filter(x=>x>.005).sort((a,b)=>a-b);
-  const median=sorted.length?sorted[Math.floor(sorted.length*.5)]:0;
-  const threshold=Math.max(.007,median*.32);
-  const starts=[0];
-  for(let i=3;i<levels.length-2;i++){
-    const t=i*hop/sr,prev=(levels[i-1]+levels[i-2]+levels[i-3])/3;
-    if(levels[i]>threshold && levels[i]>prev*1.32 && (t-starts.at(-1))>.075)starts.push(t);
+  const sorted=frames.map(x=>x.rms).filter(x=>x>.004).sort((a,b)=>a-b);
+  const median=sorted[Math.floor(sorted.length*.5)]||0;
+  const threshold=Math.max(.006,median*.26);
+  const onsets=[];
+  for(let i=2;i<frames.length-1;i++){
+    const f=frames[i],prev=(frames[i-1].rms+frames[i-2].rms)/2;
+    if(f.rms>threshold && f.rms>prev*1.38 && (!onsets.length || f.time-onsets.at(-1)>.085))onsets.push(f.time);
   }
-  // 子音の少ない「あー」なども、適切な位置を使ってリズム化できるようにする。
-  for(let t=.1;t<total-.09;t+=clamp(total/9,.17,.42)){
-    const idx=Math.min(levels.length-1,Math.floor(t*sr/hop));
-    if(levels[idx]>threshold*.8&&!starts.some(x=>Math.abs(x-t)<.075))starts.push(t);
+  const candidates=onsets.slice();
+  // 声が長く伸びている場合にも、声のある領域から断片を切り出す。
+  const spacing=clamp(total/10,.16,.38);
+  for(let t=.025;t<total-.075;t+=spacing){
+    const f=frames[Math.min(frames.length-1,Math.round(t*sr/hop))];
+    if(f && f.rms>threshold && !candidates.some(x=>Math.abs(x-t)<.09))candidates.push(t);
   }
-  starts.sort((a,b)=>a-b);
-  const syllables=starts.map((start,i)=>({start,len:Math.min(total-start,clamp((starts[i+1]??total)-start,.085,.65))}))
-    .filter(s=>s.len>=.04);
-  // 比較的クリアな「声の断片」を挿入し、加工後も原音が認識できる瞬間を残す。
+  candidates.sort((a,b)=>a-b);
+  const slices=candidates.map((start,i)=>{
+    const a=frames[Math.min(frames.length-1,Math.floor(start*sr/hop))];
+    const next=candidates[i+1]??total;
+    return {start,len:clamp(Math.min(next-start+.028,total-start),.062,.55),rms:a?.rms||0,zcr:a?.zcr||0};
+  }).filter(s=>s.start<total-.03&&s.len>.048);
+  if(!slices.length)slices.push({start:0,len:Math.min(total,.32),rms:0,zcr:0});
+  // 語句：拍ごとに近似原音を挿入するための、少し長めの声の区間。
   const phrases=[];
-  const phraseStep=clamp(total/5,.25,1.25);
-  for(let t=0;t<Math.max(.05,total-.12);t+=phraseStep){
-    const start=Math.max(0,Math.min(t,total-.13));
-    const length=Math.min(total-start,clamp(total*.35,.26,.92));
-    const i0=Math.floor(start*sr),i1=Math.min(data.length,Math.floor((start+length)*sr));
-    let sum=0,count=0;
-    for(let j=i0;j<i1;j+=32){sum+=data[j]*data[j];count++;}
-    if(Math.sqrt(sum/Math.max(1,count))>=threshold*.55)phrases.push({start,len:length});
+  for(let t=0;t<Math.max(total-.1,.1);t+=clamp(total/5,.2,.85)){
+    let best=t,bestEnergy=-1;
+    for(let d of [-.12,0,.12]){
+      const at=clamp(t+d,0,Math.max(0,total-.16));
+      const f=frames[Math.min(frames.length-1,Math.floor(at*sr/hop))];
+      if(f&&f.rms>bestEnergy){best=at;bestEnergy=f.rms;}
+    }
+    const len=Math.min(total-best,clamp(total*.28,.2,.74));
+    if(len>.08 && bestEnergy>threshold*.5)phrases.push({start:best,len});
   }
-  if(!syllables.length)syllables.push({start:0,len:Math.min(total,.35)});
-  if(!phrases.length)phrases.push({start:0,len:Math.min(total,.7)});
-  const avg=levels.reduce((a,b)=>a+b,0)/Math.max(1,levels.length);
-  return {syllables,phrases,energy:avg};
+  if(!phrases.length)phrases.push({start:0,len:Math.min(.7,total)});
+  const loud=slices.filter(s=>s.rms>=threshold).sort((a,b)=>b.rms-a.rms);
+  const crisp=loud.filter(s=>s.zcr>.07);
+  const low=loud.filter(s=>s.zcr<=.07);
+  return {slices,phrases,loud:loud.length?loud:slices,crisp:crisp.length?crisp:(loud.length?loud:slices),low:low.length?low:(loud.length?loud:slices),energy:median};
 }
 
-const RECIPES=[
-  {id:'RAP',tag:'FAST TALK'},
-  {id:'SPELL',tag:'SPELL LOOP'},
-  {id:'MANTRA',tag:'VOICE CHANT'},
-  {id:'SING',tag:'SING SONG'},
-  {id:'BOUNCE',tag:'ODD BEAT'},
-  {id:'MUTANT',tag:'MUTANT LOOP'},
+const TYPES=[
+  {id:'BEATBOX',tag:'MOUTH BEAT',range:[100,134]},
+  {id:'RAP',tag:'FAST RAP',range:[108,148]},
+  {id:'CHANT',tag:'LOOP CHANT',range:[88,126]},
+  {id:'SPELL',tag:'SPELL TALK',range:[96,136]},
+  {id:'SING',tag:'SING TALK',range:[105,138]},
+  {id:'BREAK',tag:'BROKEN RHYTHM',range:[112,149]},
 ];
 export function makeDna(seed){
-  const rng=mulberry32(seed>>>0),recipe=pick(rng,RECIPES);
-  const tempo={RAP:[136,174],SPELL:[100,145],MANTRA:[82,125],SING:[110,150],BOUNCE:[120,162],MUTANT:[118,166]}[recipe.id];
-  const bpm=Math.round(rand(rng,...tempo)),beat=60/bpm,beats=16;
-  return {...recipe,seed:seed>>>0,sprite:(rng()*0xffffffff)>>>0,bpm,beat,beats,seconds:beats*beat,
-    swing:rand(rng,.03,.14),brightness:rand(rng,.78,1.15),voiceShift:pick(rng,[0,0,0,2,3,5]),
-    bugEnergy:rand(rng,.7,1.3)};
+  const rng=mulberry32(seed>>>0),type=choose(rng,TYPES),bpm=Math.round(rand(rng,...type.range)),beat=60/bpm;
+  return {...type,seed:seed>>>0,sprite:(rng()*0xFFFFFFFF)>>>0,bpm,beat,beats:16,seconds:16*beat,
+    swing:rand(rng,.105,.27),voiceShift:choose(rng,[0,0,0,2,3,5]),bugEnergy:rand(rng,.7,1.3)};
 }
-const alloc=n=>({left:new Float32Array(n),right:new Float32Array(n)});
 
-/** 補間と短いエンベロープで波形断片を貼り付ける。loop終端の折り返しも安全に合成。 */
-function voice(out,input,{time,start,len,rate=1,gain=.5,pan=0,reverse=false,ring=0,lowpass=12500,warble=0}){
-  const sr=input.sampleRate,base=Math.floor(start*sr),remaining=input.data.length-base;
-  const source=Math.min(Math.floor(len*sr),remaining);
-  if(source<16)return;
-  const speed=clamp(rate,.84,2.6); // 声が聞き取れなくなる低音化を防ぐ下限
-  const n=Math.min(Math.floor(source/speed*RATE/sr),Math.floor(RATE*1.12));
-  if(n<24)return;
-  const dest=Math.round(time*RATE),size=out.left.length;
-  const attack=Math.min(Math.round(RATE*.006),Math.round(n*.14));
-  const release=Math.min(Math.round(RATE*.013),Math.round(n*.2));
-  const angle=(clamp(pan,-1,1)+1)*Math.PI/4;
-  const left=gain*Math.cos(angle),right=gain*Math.sin(angle);
-  const alpha=1-Math.exp(-TAU*clamp(lowpass,900,15500)/RATE);
-  let lp=0;
-  for(let i=0;i<n;i++){
-    const timeSec=i/RATE,drift=1+warble*Math.sin(TAU*4.3*timeSec);
-    const offset=i*speed*sr/RATE*drift;
-    const index=reverse?base+source-1-offset:base+offset;
-    if(index<base||index>=base+source-1)break;
-    const j=Math.floor(index),frac=index-j;
-    let sample=lerp(input.data[j],input.data[j+1],frac);
-    lp+=alpha*(sample-lp);sample=lp;
-    if(ring)sample*=.70+.30*Math.sin(TAU*ring*timeSec);
-    const envelope=Math.min(1,i/Math.max(1,attack),(n-i-1)/Math.max(1,release));
-    const pos=wrap(dest+i,size);
-    out.left[pos]+=sample*envelope*left;
-    out.right[pos]+=sample*envelope*right;
+/**
+ * 音声断片をループへ貼り付ける。最大長と速度を制限し、原音の低音沈み込みを防ぐ。
+ * エンベロープは切断面のクリックを消すが、子音のアタックを残すため短めに設定。
+ */
+function paste(out,input,e){
+  const sr=input.sampleRate,base=Math.floor(e.start*sr),srcN=Math.min(Math.floor(e.len*sr),input.data.length-base);
+  if(srcN<30)return;
+  const rate=clamp(e.rate??1,.92,2.65);const samples=Math.min(Math.floor(srcN/rate*RATE/sr),Math.round(.92*RATE));
+  if(samples<30)return;
+  const at=Math.round(e.time*RATE),size=out.left.length;
+  const attack=Math.max(15,Math.min(samples*.14,RATE*.004));
+  const release=Math.max(15,Math.min(samples*.23,RATE*.011));
+  const pan=clamp(e.pan??0,-1,1);const left=Math.cos((pan+1)*Math.PI/4)*(e.gain??.5);
+  const right=Math.sin((pan+1)*Math.PI/4)*(e.gain??.5);
+  const filter=clamp(e.filter??12000,950,16000),alpha=1-Math.exp(-TAU*filter/RATE);
+  let low=0;
+  for(let i=0;i<samples;i++){
+    const srcAt=i*rate*sr/RATE;
+    const srcIndex=e.reverse?(base+srcN-1-srcAt):(base+srcAt);
+    if(srcIndex<base||srcIndex>=base+srcN-1)break;
+    const j=Math.floor(srcIndex),frac=srcIndex-j;
+    let v=lerp(input.data[j],input.data[j+1],frac);
+    low+=alpha*(v-low);v=low;
+    if(e.ring)v*=(.68+.32*Math.sin(TAU*e.ring*i/RATE));
+    const env=clamp(Math.min(i/attack,(samples-1-i)/release,1),0,1);
+    const pos=wrap(at+i,size);
+    out.left[pos]+=v*env*left;out.right[pos]+=v*env*right;
   }
 }
 
-/** 4小節全体を組み立てる。毎小節の核となる子音・フレーズを固定して記憶に残る反復にする。 */
+/** 拍のオフセットは全パートで共通。声とGROOVEがズレないようにする。 */
+function gridTime(dna,bar,step,rng=null){
+  const s=dna.beat/4;
+  const swing=step%2?dna.swing*s:0;
+  const jitter=rng?(rng()-.5)*.006:0;
+  return bar*4*dna.beat + step*s + swing + jitter;
+}
+
+/** 16分単位の骨格。2小節のモチーフを繰り返し、最終小節のみ短いフィルを加える。 */
+const PATTERNS={
+  BEATBOX:[[0,3,4,6,8,10,12,15],[0,2,4,7,8,11,12,14]],
+  RAP:[[0,2,3,6,8,9,11,14],[0,3,4,6,8,10,11,13,15]],
+  CHANT:[[0,4,8,12,14],[0,4,7,8,12,15]],
+  SPELL:[[0,3,4,7,8,11,12,14],[0,2,4,6,8,11,12,15]],
+  SING:[[0,3,6,8,11,14],[0,2,4,7,8,12,15]],
+  BREAK:[[0,2,4,5,8,10,12,15],[0,3,4,7,8,9,12,14]],
+};
+const TONES=[0,2,3,5,7,5,3,2];
 function buildVoice(input,analysis,dna,rng,frames){
-  const out=alloc(frames),beat=dna.beat,step=beat/4;
-  const syllables=analysis.syllables,phrases=analysis.phrases;
-  const anchors=Array.from({length:8},()=>pick(rng,syllables));
-  const words=Array.from({length:4},()=>pick(rng,phrases));
-  const patterns={
-    RAP:[0,2,3,4,6,7,8,10,11,12,14,15],
-    SPELL:[0,3,4,6,8,11,12,14],
-    MANTRA:[0,4,6,8,12],
-    SING:[0,2,4,7,8,10,12,14],
-    BOUNCE:[0,2,4,5,7,8,10,12,13,15],
-    MUTANT:[0,1,4,6,8,9,11,12,14,15],
-  };
-  const melody=[0,2,5,7,5,3,2,0];
+  const out=allocate(frames),step=dna.beat/4;
+  const lead=Array.from({length:8},()=>choose(rng,analysis.loud));
+  const mouth=Array.from({length:4},()=>choose(rng,analysis.crisp));
+  const thump=Array.from({length:3},()=>choose(rng,analysis.low));
+  const phrases=Array.from({length:2},()=>choose(rng,analysis.phrases));
   for(let bar=0;bar<4;bar++){
-    const barTime=bar*beat*4;
-    for(const k of patterns[dna.id]){
-      const phraseIndex=(k+((bar%2)*2))%anchors.length;
-      const slice=anchors[phraseIndex];
-      const swing=k%2?dna.swing*step:0;
-      const t=barTime+k*step+swing;
-      // ほぼ原音〜高めのピッチを中心にする。低速化は低音アクセントだけに限定。
-      let rate=1;
-      if(dna.id==='SING')rate=Math.pow(2,(melody[phraseIndex]+dna.voiceShift)/12);
-      else if(dna.id==='MANTRA')rate=pick(rng,[.97,1,1.03,1.07,1.12]);
-      else if(dna.id==='RAP')rate=pick(rng,[1.08,1.19,1.35,1.52,1.72]);
-      else if(dna.id==='SPELL')rate=pick(rng,[.98,1.06,1.18,1.25,1.42]);
-      else if(dna.id==='BOUNCE')rate=pick(rng,[.98,1.08,1.24,1.4,1.56]);
-      else rate=pick(rng,[.90,1.03,1.23,1.46,1.85]);
-      rate=clamp(rate*(.986+rng()*.028),.88,2.15);
-      const length=dna.id==='MANTRA'?.42:dna.id==='SING'?.35:dna.id==='SPELL'?.30:.24;
-      voice(out,input,{time:t,start:slice.start,len:Math.min(slice.len,length),rate,gain:(k%4===0?.64:.49),
-        pan:rand(rng,-.35,.35),lowpass:rand(rng,6700,13500),
-        reverse:dna.id==='MUTANT'&&rng()<.14,ring:dna.id==='MUTANT'&&rng()<.22?rand(rng,41,95):0});
-      // 32分音符の高速な子音反復。速度と長さの両方を変えて機械的なラップを作る。
-      if((dna.id==='RAP'&&k%4===3)||(dna.id==='SPELL'&&k===11)||(dna.id==='MUTANT'&&k===15)){
-        const count=dna.id==='RAP'?3:4;
-        for(let q=0;q<count;q++)voice(out,input,{time:t+step*.26+q*step*.18,start:slice.start,
-          len:Math.min(slice.len,.055),rate:clamp(rate*(1+q*.08),1,2.45),gain:.20,pan:(q%2?-.5:.5),lowpass:11500});
+    const pattern=PATTERNS[dna.id][bar%2];
+    const fill=bar===3?[13,14,15]:[];
+    // beatboxは、声素材だけでキック/スネア的な2層を作る。
+    // 声質が母音だけでも音量包絡と高低差で強拍を区別できる。
+    for(let beat=0;beat<4;beat++){
+      const base=beat*4;
+      const onKick=beat===0||beat===2||(bar%2===1&&beat===3);
+      if(onKick){
+        const src=thump[(beat+bar)%thump.length];
+        paste(out,input,{time:gridTime(dna,bar,base,rng),start:src.start,len:Math.min(src.len,.135),
+          rate:choose(rng,[.96,1,1.04]),gain:.50,filter:1650,pan:-.06});
       }
-      // 「歌」も実音声断片から作る。電子的な和音は低音に埋もれない薄い高声のみ。
-      if(dna.id==='SING'&&k%4===0){voice(out,input,{time:t+.035,start:slice.start,len:Math.min(slice.len,.32),
-        rate:clamp(rate*1.26,1,2.2),gain:.16,pan:bar%2?-.75:.75,lowpass:9500});}
+      if(beat===1||beat===3){
+        const src=mouth[(beat+bar)%mouth.length];
+        paste(out,input,{time:gridTime(dna,bar,base,rng),start:src.start,len:Math.min(src.len,.095),
+          rate:choose(rng,[1.45,1.65,1.88]),gain:.35,filter:11200,pan:.07});
+      }
     }
-    // もっとも大切な可聴性：各小節の中央または冒頭に、原音をほぼ保った短い語句を残す。
-    // この経路にはリング変調・逆再生・重いフィルターを使わない。
-    const word=words[bar%2],at=dna.id==='MANTRA'?barTime+beat*.65:barTime+beat*2.1;
-    const clearRate=dna.id==='RAP'?1.18:dna.id==='BOUNCE'?1.12:1.02;
-    voice(out,input,{time:at,start:word.start,len:word.len,rate:clearRate,gain:dna.id==='MUTANT'?.36:.43,
-      lowpass:13500,pan:bar%2?-.12:.12});
-    // 詠唱は短い同一語句を繰り返して呪文感を作る。ラップでは語句の頭を再び強調。
-    if(dna.id==='MANTRA'||dna.id==='SPELL'){
-      const unit=dna.id==='MANTRA'?beat*1.6:beat*.8;
-      voice(out,input,{time:barTime+unit,start:word.start,len:Math.min(word.len,.68),
-        rate:dna.id==='MANTRA'?1.04:1.24,gain:.30,pan:bar%2?.34:-.34,lowpass:11000});
+    // 声のリード: 毎小節すべてをランダムに変えず、同一位置の音節を固定して記憶に残す。
+    for(const k of [...new Set([...pattern,...fill])].sort((a,b)=>a-b)){
+      const s=lead[(k+Math.floor(k/4)+(bar%2)*2)%lead.length];
+      const onDownbeat=k%4===0, strong=k===0||k===8;
+      let rate;
+      if(dna.id==='RAP')rate=choose(rng,[1,1.12,1.3,1.48,1.65]);
+      else if(dna.id==='CHANT')rate=choose(rng,[.98,1,1.04,1.12]);
+      else if(dna.id==='SPELL')rate=choose(rng,[1,1.15,1.26,1.38]);
+      else if(dna.id==='SING')rate=Math.pow(2,(TONES[(k/2|0)%8]+dna.voiceShift)/12);
+      else if(dna.id==='BREAK')rate=choose(rng,[1,1.06,1.2,1.5,1.85]);
+      else rate=choose(rng,[1,1.24,1.48,1.72]);
+      // 休符の間を意識して長い声を詰め込みすぎない。
+      const maxLength=dna.id==='CHANT'?.33:dna.id==='SING'?.31:dna.id==='RAP'?.19:.23;
+      const length=Math.min(s.len,maxLength,Math.max(.065,step*1.48));
+      paste(out,input,{time:gridTime(dna,bar,k,rng),start:s.start,len:length,rate,
+        gain:strong?.66:onDownbeat?.50:.39,filter:strong?14000:10000,pan:(k%4===0)?0:(bar%2?.21:-.21),
+        reverse:dna.id==='BREAK'&&k>=13&&rng()<.21});
+      // 細かい音節を1拍の終わりにだけ畳み掛ける。常時刻まないからフロウが感じられる。
+      const roll=(dna.id==='RAP'&&(k===6||k===14))||(dna.id==='SPELL'&&k===11)||(dna.id==='BREAK'&&k===15);
+      if(roll){
+        for(let q=0;q<3;q++)paste(out,input,{time:gridTime(dna,bar,k,rng)+step*(q+1)*.22,
+          start:s.start,len:Math.min(s.len,.060),rate:clamp(rate*(1+q*.08),1,2.55),gain:.20,filter:11000,pan:q%2?.4:-.4});
+      }
+    }
+    // 元の声の意味が失われないよう、2小節ごとに原音に近い語句を残す。
+    // 語句が重なると発音が不明瞭になるので、配置箇所は小節内の隙間へ逃がす。
+    const clear=phrases[(bar>>1)%2];
+    const phraseAt=dna.id==='CHANT'?8:dna.id==='RAP'?4:10;
+    paste(out,input,{time:gridTime(dna,bar,phraseAt),start:clear.start,len:Math.min(clear.len,.44),
+      rate:dna.id==='RAP'?1.13:1.0,gain:.43,filter:14000,pan:0});
+    if(dna.id==='CHANT'||dna.id==='SPELL'){
+      const src=lead[(bar%2)*3];
+      paste(out,input,{time:gridTime(dna,bar,15),start:src.start,len:Math.min(src.len,.16),rate:1.06,gain:.28,pan:-.23});
     }
   }
-  // 原音が聴こえる範囲でのみ、少量の折り返し反復エコーを付加する。
-  const dryL=out.left.slice(),dryR=out.right.slice();
-  const echoSamples=Math.round(beat*.75*RATE);
-  const echo=dna.id==='SPELL'?.18:dna.id==='MANTRA'?.12:.09;
+  // 原音ベースの短い反響のみ。前景のリズムを滲ませない。
+  const tap=Math.round(dna.beat*.75*RATE),amount=dna.id==='SPELL'?.12:.068;
+  const originalL=out.left.slice(),originalR=out.right.slice();
   for(let i=0;i<frames;i++){
-    out.left[i]+=dryR[wrap(i-echoSamples,frames)]*echo;
-    out.right[i]+=dryL[wrap(i-echoSamples,frames)]*echo;
+    out.left[i]+=originalR[wrap(i-tap,frames)]*amount;
+    out.right[i]+=originalL[wrap(i-tap,frames)]*amount;
   }
   return out;
 }
 
-/** 前景の声を邪魔しない短い8bit風音。単独で楽曲を作らず拍の目印にする。 */
-function percussion(out,time,type,pitch,volume,pan){
-  const base=Math.round(time*RATE),n=out.left.length;
-  const duration=type==='bass'?.16:type==='plink'?.13:.047;
-  const end=Math.round(duration*RATE),gl=volume*Math.cos((pan+1)*Math.PI/4),gr=volume*Math.sin((pan+1)*Math.PI/4);
-  for(let i=0;i<end;i++){
-    const t=i/RATE;let v;
-    if(type==='bass')v=Math.sin(TAU*(pitch*t+pitch*.4*(1-Math.exp(-t*35))/35))*Math.exp(-t*23);
-    else if(type==='plink')v=(Math.sin(TAU*pitch*t)+.18*Math.sin(TAU*pitch*2.7*t))*Math.exp(-t*32);
-    else v=(Math.sin(TAU*1760*t)+.35*Math.sin(TAU*2940*t))*Math.exp(-t*82);
-    const p=wrap(base+i,n);out.left[p]+=v*gl;out.right[p]+=v*gr;
+/** 軽量な電子ドラム。キックは周波数下降、スネアは短いノイズ、ハットは帯域限定ノイズ。 */
+function drum(out,at,type,rng,gain=1,pan=0){
+  const durations={kick:.22,snare:.15,hat:.054,bass:.125,blip:.11};
+  const n=Math.round(durations[type]*RATE),start=Math.round(at*RATE),size=out.left.length;
+  const lg=Math.cos((clamp(pan,-1,1)+1)*Math.PI/4)*gain,rg=Math.sin((clamp(pan,-1,1)+1)*Math.PI/4)*gain;
+  let hp=0,lastNoise=0,phase=0;
+  for(let i=0;i<n;i++){
+    const t=i/RATE,random=rng()*2-1;let v=0;
+    if(type==='kick'){
+      // 速く沈むピッチエンベロープにクリックを加えて音量を小さくしても拍を感じさせる。
+      const freq=57+165*Math.exp(-t*30);phase+=TAU*freq/RATE;
+      v=Math.sin(phase)*Math.exp(-t*20)+random*.065*Math.exp(-t*95);
+    }else if(type==='snare'){
+      const noisy=(random-lastNoise);lastNoise=random;
+      v=(noisy*.64+Math.sin(TAU*187*t)*.20)*Math.exp(-t*27);
+    }else if(type==='hat'){
+      hp+=.16*(random-hp);v=(random-hp)*Math.exp(-t*76);
+    }else if(type==='bass'){
+      const freq=92;v=(Math.sin(TAU*freq*t)+.24*Math.sin(TAU*freq*2*t))*Math.exp(-t*32);
+    }else{
+      v=(Math.sin(TAU*545*t)+.17*Math.sin(TAU*1088*t))*Math.exp(-t*36);
+    }
+    const p=wrap(start+i,size);out.left[p]+=v*lg;out.right[p]+=v*rg;
   }
 }
+
+/** GROOVE ON は旋律で埋めず、ヒップホップの背骨を作る。 */
 function buildGroove(dna,rng,frames,energy){
-  const out=alloc(frames);
-  if(energy<.0009)return out;
-  const root=110*Math.pow(2,dna.voiceShift/12),beat=dna.beat;
+  const out=allocate(frames);
+  if(energy<.0005)return out;
   for(let bar=0;bar<4;bar++){
-    const t=bar*4*beat;
-    percussion(out,t,'bass',root,.085,-.17);
-    if(dna.id==='RAP'||dna.id==='BOUNCE')percussion(out,t+beat*2.5,'bass',root*.75,.042,.18);
-    if(bar%2===0)percussion(out,t+beat*2,'click',0,.035,.1);
-    for(let b=0;b<4;b++)if(rng()<.48)percussion(out,t+(b+.5)*beat,'click',0,.021,b%2?.5:-.5);
-    if(bar%2===1)percussion(out,t+beat*3,'plink',root*4*Math.pow(2,(bar%3)*2/12),.035,.35);
+    // キック：1拍目・3拍目を核に、2小節ごとに裏拍の先取り。
+    for(const [s,g] of [[0,.63],[8,.51],...(bar%2?[[14,.34]]:[[10,.28]])]){
+      drum(out,gridTime(dna,bar,s), 'kick',rng,g,-.05);
+    }
+    // スネア：常に2拍目と4拍目。ここが v0.4 との最も重要な差分。
+    for(const s of [4,12])drum(out,gridTime(dna,bar,s),'snare',rng,.37,.05);
+    // ハット：少数の裏拍とゴースト。完全な8分連打に固定しない。
+    for(const s of [2,6,10,14])drum(out,gridTime(dna,bar,s), 'hat',rng,s===6?.17:.13,s%4===2?.36:-.36);
+    if(bar===1||bar===3){
+      for(const s of [11,15])drum(out,gridTime(dna,bar,s),'hat',rng,.10,-.28);
+    }
+    // 電子音は毎小節少数。前バージョンのテクノポップ的メロディを復活させない。
+    if(bar===1||bar===3)drum(out,gridTime(dna,bar,7),'blip',rng,.13,.4);
+    if(bar%2===0)drum(out,gridTime(dna,bar,0),'bass',rng,.15,-.16);
   }
   return out;
 }
-function levelLayers(voiceLayer,grooveLayer){
-  let peak=0,groovePeak=0;
-  for(let i=0;i<voiceLayer.left.length;i++){
-    peak=Math.max(peak,Math.abs(voiceLayer.left[i]),Math.abs(voiceLayer.right[i]));
-    groovePeak=Math.max(groovePeak,Math.abs(grooveLayer.left[i]),Math.abs(grooveLayer.right[i]));
+function stats(layer){
+  let peak=0,sum=0;
+  for(let i=0;i<layer.left.length;i+=2){
+    const l=layer.left[i],r=layer.right[i];peak=Math.max(peak,Math.abs(l),Math.abs(r));sum+=l*l+r*r;
   }
-  const gVoice=peak>.0001?Math.min(3.8,.82/peak):1;
-  const gGroove=groovePeak>.0001?.15/groovePeak:1;
-  for(let i=0;i<voiceLayer.left.length;i++){
-    voiceLayer.left[i]=Math.tanh(voiceLayer.left[i]*gVoice)*.90;
-    voiceLayer.right[i]=Math.tanh(voiceLayer.right[i]*gVoice)*.90;
-    grooveLayer.left[i]*=gGroove;grooveLayer.right[i]*=gGroove;
-  }
-  for(const layer of [voiceLayer,grooveLayer])for(const ch of [layer.left,layer.right]){
-    // 最初と最後を同じ値に近づけてループの境界のクリックを抑える。
-    const n=Math.min(300,Math.floor(ch.length*.002)),mid=(ch[0]+ch.at(-1))*.5;
+  return {peak,rms:Math.sqrt(sum/Math.max(1,layer.left.length))};
+}
+function smoothLoop(layer){
+  for(const channel of [layer.left,layer.right]){
+    const n=Math.min(270,Math.round(channel.length*.002)),mid=(channel[0]+channel.at(-1))*.5;
     for(let i=0;i<n;i++){
       const w=((n-i)/n)**2;
-      ch[i]=lerp(ch[i],mid,w);ch[ch.length-1-i]=lerp(ch[ch.length-1-i],mid,w);
+      channel[i]=lerp(channel[i],mid,w);channel[channel.length-1-i]=lerp(channel[channel.length-1-i],mid,w);
     }
   }
+}
+function normalizeLayers(voice,groove){
+  const v=stats(voice),g=stats(groove);
+  const gv=v.peak>.0001?Math.min(5.5,.76/v.peak,.125/Math.max(v.rms,.0002)):1;
+  for(let i=0;i<voice.left.length;i++){
+    voice.left[i]=Math.tanh(voice.left[i]*gv)*.94;
+    voice.right[i]=Math.tanh(voice.right[i]*gv)*.94;
+  }
+  // ピークだけでなく RMS を基準にゲインを決める。
+  // v0.4 でスネアやキックが聴こえにくかった原因（伴奏を peak=.15 に固定）を解消。
+  const vr=stats(voice),gg=g.rms>.00001?Math.min(3,.61*vr.rms/g.rms,.41/Math.max(.00001,g.peak)):0;
+  for(let i=0;i<groove.left.length;i++){
+    groove.left[i]*=gg;groove.right[i]*=gg;
+  }
+  smoothLoop(voice);smoothLoop(groove);
 }
 export function hatch(input,seed){
   if(!input?.data?.length||!(input.sampleRate>0))throw Error('No recorded audio.');
-  const dna=makeDna(seed),frames=Math.round(dna.seconds*RATE),analysis=analyze(input);
-  const foreground=buildVoice(input,analysis,dna,mulberry32(seed^0xA17671),frames);
-  const groove=buildGroove(dna,mulberry32(seed^0xB00B15),frames,analysis.energy);
-  levelLayers(foreground,groove);
-  return {voice:foreground,groove,sampleRate:RATE,duration:frames/RATE,dna};
+  const dna=makeDna(seed),frames=Math.round(dna.seconds*RATE),a=analyze(input);
+  const voice=buildVoice(input,a,dna,mulberry32(seed^0x4B105),frames);
+  const groove=buildGroove(dna,mulberry32(seed^0xB00B15),frames,a.energy);
+  normalizeLayers(voice,groove);
+  return {voice,groove,sampleRate:RATE,duration:frames/RATE,dna};
 }
 export function mixLayers(song,enabled=true){
   const n=song.voice.left.length,left=new Float32Array(n),right=new Float32Array(n);
