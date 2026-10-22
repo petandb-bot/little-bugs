@@ -3,59 +3,61 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#d9d6dd">
+  <meta name="theme-color" content="#1a1026">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Little Bugs">
-  <meta name="description" content="Record your voice. Hatch a tiny song. Pet your little bug.">
+  <meta name="description" content="A haunted 8-bit voice toy. Record. Mutate. Loop. Save.">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" type="image/png" sizes="192x192" href="./assets/icon-192.png">
   <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./style.css">
-  <title>LITTLE BUGS — 8-Bit Voice Pets</title>
+  <title>LITTLE BUGS / THE VOICE MUTATION TOY</title>
 </head>
 <body>
   <main class="app-shell">
     <header class="masthead">
-      <div class="logo-line">
-        <div class="logomark" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
-        <div><p class="eyebrow">POCKET MUTATION SYSTEM / 198X</p><h1>LITTLE <span>BUGS</span><b>✳</b></h1></div>
+      <div class="title-group">
+        <div class="pretitle">★ POCKET MONSTER SOUND SYSTEM ★</div>
+        <h1>LITTLE <span>BUGS</span><em>!</em></h1>
+        <div class="subtitle">INSERT VOICE / EXPECT TROUBLE</div>
       </div>
-      <div class="version-tag">LB-03<br><span>8BIT</span></div>
+      <div class="version-tag">LB<br>04</div>
     </header>
 
-    <section class="toy" aria-label="Little Bugs voice playground">
-      <div class="toy-top"><span><span class="led" id="led"></span> SOUND HABITAT</span><span id="counter">NO. 0000</span></div>
+    <section class="toy" aria-label="Little Bugs sound arcade">
+      <div class="toy-top"><span><i class="led" id="led"></i> MUTATION DEVICE</span><span id="counter">NO. 0000</span></div>
       <div class="screen-bezel">
+        <div class="screen-sign"><span>◀ BUG VISION ▶</span><span>198X</span></div>
         <div class="display-frame">
-          <div id="visual-stage" class="visual-stage" role="img" aria-label="Animated 8-bit voice creature. Tap to pet it."></div>
-          <div class="stage-top-label"><span id="stage-label">AWAITING A VOICE</span><span class="tiny-hearts">♥ ♥</span></div>
-          <div class="stage-bottom-label"><span id="dna-label">INSERT A SOUND</span><span id="time-label">00:00</span></div>
+          <div id="visual-stage" class="visual-stage" role="img" aria-label="An animated pixel creature. Tap to surprise it."></div>
+          <div class="stage-top-label"><span id="stage-label">INSERT A VOICE</span><span class="tiny-hearts">✳ ✳ ✳</span></div>
+          <div class="stage-bottom-label"><span id="dna-label">READY TO MUTATE</span><span id="time-label">00:00</span></div>
           <div class="pixel-scanline" aria-hidden="true"></div>
         </div>
-        <div class="screen-detail"><span>8-BIT BUG VISION</span><span>PRESS HATCH TO BEGIN</span></div>
+        <div class="screen-detail"><span>▲ VOICE → BUG ▲</span><span>NO TWO ALIKE</span></div>
       </div>
 
       <div class="meter-track" aria-label="Audio level"><div id="meter-bars" class="meter-bars" aria-hidden="true"></div><span id="meter-title" class="meter-title">MIC INPUT</span></div>
-
       <div class="groove-row">
-        <div class="groove-copy"><div class="tiny-badge">B</div><div><strong>GROOVE</strong><small>ADD A LITTLE MUSIC</small></div></div>
+        <div class="groove-copy"><div class="tiny-badge">♫</div><div><strong>GROOVE</strong><small>TINY EXTRA NOISES</small></div></div>
         <button id="groove-btn" class="groove-switch enabled" type="button" aria-label="Toggle GROOVE accompaniment" aria-pressed="true"><span class="switch-lamp"></span><span id="groove-state">ON</span></button>
       </div>
-
       <div class="control-grid">
         <button id="rec-btn" class="control control-rec" type="button" aria-label="Start recording"><span class="control-icon" id="rec-icon">●</span><span id="rec-label">REC</span><small>01</small></button>
         <button id="hatch-btn" class="control control-hatch" type="button" disabled><span class="control-icon">✳</span><span>HATCH</span><small>02</small></button>
         <button id="play-btn" class="control control-play" type="button" disabled><span class="control-icon" id="play-icon">▶</span><span id="play-label">PLAY</span><small>03</small></button>
         <button id="save-btn" class="control control-save" type="button" disabled><span class="control-icon">↓</span><span>SAVE</span><small>04</small></button>
       </div>
-      <div class="toy-foot"><span id="status" role="status" aria-live="polite">TAP REC TO BEGIN.</span><span id="elapsed">MAX 12 SEC</span></div>
+      <div class="toy-foot"><span id="status" role="status" aria-live="polite">PRESS REC TO BEGIN.</span><span id="elapsed">MAX 12 SEC</span></div>
       <div class="speaker-grid" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
     </section>
-
-    <footer class="page-foot"><p><strong>RECORD · HATCH · PLAY</strong><br>YOUR VOICE BECOMES A TINY SONG.</p><span>LOCAL AUDIO ONLY<br>NO UPLOADS / WAV EXPORT</span></footer>
+    <footer class="page-foot"><span>THIS MACHINE EATS SOUNDS.</span><span>LOCAL AUDIO · WAV EXPORT</span></footer>
   </main>
-  <!-- 描画はp5.js。生成・録音・保存はWeb Audioと標準ブラウザーAPIを使用。 -->
+  <!-- 日本語メモ：p5.jsはドット描画専用。音の処理・録音・保存はブラウザー標準のAPIで完結する。 -->
   <script src="https://cdn.jsdelivr.net/npm/p5@1.11.13/lib/p5.min.js" defer></script>
   <script type="module" src="./app.js"></script>
 </body>

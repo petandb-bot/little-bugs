@@ -2,7 +2,7 @@ import {hatch, wavBlob, monoFromAudioBuffer, RATE, mixLayers} from './audio-engi
 import {BugVisual} from './visual.js';
 
 /**
- * LITTLE BUGS v0.3 — recording, live GROOVE switch and export
+ * LITTLE BUGS v0.4 — recording, live GROOVE switch and export
  *
  * データは端末上のメモリーにのみ保持します。
  * iOS Safari の MediaRecorder は MP4/AAC を使う場合があるため、
@@ -81,7 +81,7 @@ function stopPlayback() {
   }
   if(state==='playing'){
     state=rendered?'hatched':'idle';visual.setMode('hatched');
-    ui.stage.textContent=`HELLO, BUG #${String(counter).padStart(3,'0')}!`;
+    ui.stage.textContent=`MUTATION NO. ${String(counter).padStart(4,'0')}`;
     setStatus('BUG IS READY TO LOOP.');
   }
   visual.setProgress(0);visual.setElapsed(0);
@@ -192,7 +192,7 @@ async function doHatch() {
   if(!original || renderInProgress || ['recording','requesting','loading'].includes(state)) return;
   stopPlayback();
   renderInProgress=true;state='hatching';
-  ui.stage.textContent='HATCHING…';setStatus('MAKING A TINY SONG FROM YOUR VOICE…');syncUI();
+  ui.stage.textContent='HATCHING…';setStatus('SUMMONING A LOOP FROM YOUR VOICE…');syncUI();
   // 大きな同期処理の前に画面を少なくとも1フレーム描画する。
   await new Promise(resolve=>requestAnimationFrame(()=>setTimeout(resolve,0)));
   try {
@@ -200,12 +200,12 @@ async function doHatch() {
     rendered=next;
     counter++;
     ui.counter.textContent=`NO. ${String(counter).padStart(4,'0')}`;
-    ui.stage.textContent=`HELLO, BUG #${String(counter).padStart(3,'0')}!`;
-    ui.dna.textContent=`${next.dna.name} / ${next.dna.bpm} BPM`;
+    ui.stage.textContent=`MUTATION NO. ${String(counter).padStart(4,'0')}`;
+    ui.dna.textContent=`VOICE LOOP / ${next.dna.bpm} BPM`;
     ui.time.textContent=clock(next.duration);
     ui.elapsed.textContent=`${next.duration.toFixed(1)} SEC LOOP`;
     visual.setDna(next.dna);
-    setStatus('NEW LOOP BORN. TAP PLAY OR HATCH AGAIN.');
+    setStatus('IT LIVES. TAP PLAY OR HATCH AGAIN.');
     state='hatched';
   } catch(err) {state=rendered?'hatched':'recorded';showError(err,'HATCH');}
   renderInProgress=false;syncUI();
@@ -241,7 +241,7 @@ async function togglePlay() {
 }
 async function saveWav() {
   if(!rendered)return;
-  const filename=`little-bugs-${String(counter).padStart(4,'0')}-${rendered.dna.name.toLowerCase().replace(/\s+/g,'-')}-${grooveEnabled?'groove':'voice'}.wav`;
+  const filename=`little-bugs-${String(counter).padStart(4,'0')}-${grooveEnabled?'groove':'voice'}.wav`;
   // 再生中であっても、GROOVEの最新状態を含めたWAVを保存する。
   const blob=wavBlob(mixLayers(rendered,grooveEnabled));
   const file=new File([blob],filename,{type:'audio/wav'});

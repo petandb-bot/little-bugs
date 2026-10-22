@@ -1,219 +1,213 @@
 import {mulberry32} from './audio-engine.js';
-
 /**
- * LITTLE BUGS v0.3 — 8-bit pet engine
- * 固定画像を使わず、個体のDNAから「種類・色・目・表情・装飾」を組み立てる。
- * スプライトは短いコマ送りで、耳・脚・目・羽・口が別々に動く。
- * 描画はp5.jsのCanvasを使用。CDNが使えない場合はCanvas2Dへ退避する。
+ * LITTLE BUGS v0.4 — TOXIC PIXEL PET ENGINE
+ * 18種の「形態遺伝子」と、眼・口・色・模様・動きの組み合わせで個体を作る。
+ * 名前表示はしない。絵は低解像度Canvasへ離散的に描画して初期ゲーム機らしさを保つ。
  */
 const PALETTES=[
-  {body:'#F6D66A',shadow:'#DF8D71',spot:'#FFF0B1',cheek:'#FF799F'},
-  {body:'#83E5CC',shadow:'#389DAD',spot:'#E0FFE5',cheek:'#FFC0D1'},
-  {body:'#F7A7CB',shadow:'#BD68AC',spot:'#FFF4DD',cheek:'#F9D66F'},
-  {body:'#ADA6FF',shadow:'#6D73C8',spot:'#D6F6FF',cheek:'#FFB19E'},
-  {body:'#FFB77D',shadow:'#E2738F',spot:'#F9F0B4',cheek:'#F4E3FF'},
-  {body:'#95D4FA',shadow:'#568DCF',spot:'#D7FFFF',cheek:'#FEA8B8'},
+  {skin:'#C9FB47',shade:'#729D3A',shine:'#F1FFAE',cheek:'#FF599B'},
+  {skin:'#FF6BB1',shade:'#AC417D',shine:'#FFD0EA',cheek:'#E9FF66'},
+  {skin:'#A8A1FF',shade:'#5C4DA3',shine:'#E5D4FF',cheek:'#F7E36D'},
+  {skin:'#FFCC51',shade:'#DC6C43',shine:'#FFF1A0',cheek:'#FC5F94'},
+  {skin:'#6AE5CE',shade:'#249D9C',shine:'#CCFFF3',cheek:'#FA74A2'},
+  {skin:'#FA8B61',shade:'#C6466B',shine:'#FFE5A2',cheek:'#94F7CD'},
+  {skin:'#E6E5D0',shade:'#9F96A7',shine:'#FFFFFF',cheek:'#FC63A4'},
+  {skin:'#BFF270',shade:'#48ABAD',shine:'#F2FFAE',cheek:'#BB79E3'},
 ];
-const INK='#17203F',BLACK='#141C35',SKY='#141C3D',GLOW='#FFF0B4';
-const SPECIES=[
-  {name:'PIP',shape:[2,4,6,7,7,7,6,5,3],kind:'ears'},
-  {name:'MOMO',shape:[3,4,6,7,7,6,6,4,2],kind:'puff'},
-  {name:'DOT',shape:[1,3,5,6,6,7,7,6,4,2],kind:'sprout'},
-  {name:'POPPY',shape:[3,6,7,7,7,6,5,4,2],kind:'wings'},
-  {name:'BIBI',shape:[3,5,5,6,6,5,5,4,2],kind:'robot'},
-  {name:'MINT',shape:[2,4,7,7,7,7,5,4,2],kind:'frog'},
-  {name:'GIGI',shape:[1,3,5,6,5,5,4,3,1],kind:'ghost'},
-  {name:'BOO',shape:[2,4,5,7,7,6,5,5,3],kind:'star'},
-  {name:'MIMI',shape:[3,4,6,7,7,6,5,4,2],kind:'antenna'},
-  {name:'NIB',shape:[2,5,6,6,7,7,6,4,2],kind:'shell'},
-  {name:'ZUZU',shape:[2,4,6,7,7,6,5,4,3],kind:'cat'},
-  {name:'TOTO',shape:[3,5,7,7,7,6,5,4,2],kind:'crab'},
-];
-export class BugVisual {
+const INK='#101326',DARK='#100E28',SKY='#17102D';
+const noiseDots=[[12,23],[177,25],[23,97],[161,103],[58,44],[140,129],[34,143]];
+const cell=5,W=21,H=17;
+const within=(v,a,b)=>v>=a&&v<=b;
+
+/** 輪郭を全く異なる数式で構成する。左右対称が基本だが、ウイルスやワームは偏心。 */
+function maskFor(species){
+  const mask=[];
+  for(let y=0;y<H;y++){
+    const row=[];
+    for(let x=0;x<W;x++){
+      const nx=(x-10)/10,ny=(y-8)/8,ax=Math.abs(nx),ay=Math.abs(ny);
+      let yes=false;
+      switch(species){
+        case 0:yes=(nx*nx*.9+ny*ny*1.03)<.91;break; // まるいゼリー
+        case 1:yes=(ny<.45&&(nx*nx*.8+(ny+.2)**2)<.92)||(ny>=.4&&ax<.81&&((x+y)%5!==0||y<12));break; // 幽霊
+        case 2:yes=(ax<.76&&ay<.83)||(y<6&&within(x,3,6))||(y<6&&within(x,14,17));break; // 長い耳
+        case 3:yes=(y<10&&nx*nx*.92+((y-6)/8)**2<.95)||(y>=10&&y<16&&[4,7,10,13,16].some(a=>Math.abs(x-a)<2));break; // クラゲ
+        case 4:yes=(ax<.54&&ay<.85)||(y>=4&&y<=10&&ax>.5&&ax<1&&((y+Math.floor(x/3))%4!==0));break; // コウモリ
+        case 5:yes=(y<8&&nx*nx+((y-6)/6)**2<.98)||(y>=8&&ax<.35)||(y>=12&&ax<.58);break; // キノコ
+        case 6:yes=(ny<.36&&(nx*nx/.95+((ny+.08)/.62)**2<1))||(ny>=.1&&ny<.85&&ax<.48);break; // UFO
+        case 7:yes=(ax+ay*.85<.97)||(ax<.21)||(ay<.25&&ax<.98);break; // 星型
+        case 8:yes=(nx*nx/.86+((ny+.33)/.66)**2<1)||(nx*nx/.85+((ny-.36)/.69)**2<1);break; // 二段虫
+        case 9:yes=(ax<.53&&ay<.65)||(y>=5&&y<=11&&ax>.48&&ax<1&&y%3!==0);break; // 蜘蛛
+        case 10:yes=(nx*nx/.73+(ny+.02)**2<.9)||(y<=5&&((x>=3&&x<=7)||(x>=13&&x<=17)));break; // ネコ
+        case 11:yes=(ax<.8&&ay<.74)||(y>=12&&ax<.6&&x%3!==0);break; // 歯のある箱
+        case 12:yes=Math.abs(y-(8+3*Math.sin(x*.38)))<3&&ax<.94;break; // うねるワーム
+        case 13:yes=(y<=9&&((((x-6)**2+(y-7)**2)<35)||(((x-14)**2+(y-7)**2)<35)))||(y>9&&Math.abs(x-10)<(18-y)*.85);break; // ハート
+        case 14:yes=(nx*nx+ny*ny<.76)||(Math.abs(x-10)<2&&ay<1)||(Math.abs(y-8)<2&&ax<1);break; // ウイルス
+        case 15:yes=(ax<.70&&ny<.2)||(ny>=.2&&ax<.77*(1-(ny-.2)*.42))||(ny<-.6&&ax<.28);break; // しずく
+        case 16:yes=(nx*nx/.85+ny*ny/.82<1)||(y>=10&&x>=5&&x<=16&&x%4!==0);break; // 溶け虫
+        case 17:yes=(ax<.58&&ay<.75)||(y>=4&&y<=11&&ax>.58&&ax<.98&&y%3!==1);break; // カニ
+      }
+      row.push(yes);
+    }
+    mask.push(row);
+  }
+  return mask;
+}
+export class BugVisual{
   constructor(mount){
     this.mount=mount;this.width=192;this.height=160;
-    this.mode='idle';this.dna=null;this.level=0;this.progress=0;this.elapsed=0;
-    this.pokedUntil=0;this.sprite=null;this.groove=true;this.start=performance.now();this.setupCanvas();
-    this.mount.addEventListener('pointerdown',()=>this.poke());
+    this.mode='idle';this.dna=null;this.level=0;this.progress=0;this.elapsed=0;this.groove=true;
+    this.bug=null;this.pokedUntil=0;this.start=performance.now();this.lastFrame=-1;
+    this.createCanvas();this.mount.addEventListener('pointerdown',()=>this.poke());
   }
-  setupCanvas(){
+  createCanvas(){
     if(window.p5){
       this.p5=new window.p5(p=>{
         p.setup=()=>{p.createCanvas(this.width,this.height);p.pixelDensity(1);p.noSmooth();p.frameRate(30);};
         p.draw=()=>this.paint(p.drawingContext);
       },this.mount);
     }else{
-      const c=document.createElement('canvas');c.width=this.width;c.height=this.height;
-      this.mount.appendChild(c);this.canvas=c;this.ctx=c.getContext('2d');
-      const loop=()=>{this.paint(this.ctx);this.animation=requestAnimationFrame(loop);};loop();
+      const canvas=document.createElement('canvas');canvas.width=this.width;canvas.height=this.height;
+      this.mount.appendChild(canvas);this.canvas=canvas;this.ctx=canvas.getContext('2d');
+      const frame=()=>{this.paint(this.ctx);this.animation=requestAnimationFrame(frame);};frame();
     }
   }
-  setMode(x){this.mode=x;}
-  setDna(dna){this.dna=dna;this.sprite=dna?this.createSprite(dna):null;this.mode=dna?'hatched':'idle';}
-  setLevel(x){this.level=Math.max(0,Math.min(1,x));}
-  setProgress(x){this.progress=Math.max(0,Math.min(1,x));}
-  setElapsed(x){this.elapsed=x;}
-  setGroove(enabled){this.groove=!!enabled;}
-  poke(){this.pokedUntil=performance.now()+900;}
-  createSprite(dna){
-    const r=mulberry32(dna.sprite),species=SPECIES[Math.floor(r()*SPECIES.length)];
-    return {...species,palette:PALETTES[Math.floor(r()*PALETTES.length)],
-      eyeStyle:Math.floor(r()*4),mouth:Math.floor(r()*4),mark:Math.floor(r()*5),
-      personality:Math.floor(r()*4),leftHand:r()>.27,feet:Math.floor(r()*3),
-      eyeSpace:r()>.4?5:4,earHeight:r()>.45?2:3};
+  setDna(dna){this.dna=dna;this.bug=dna?this.makeBug(dna):null;this.mode=dna?'hatched':'idle';this.lastFrame=-1;}
+  setMode(m){this.mode=m;this.lastFrame=-1;}
+  setLevel(v){this.level=Math.max(0,Math.min(1,v));}
+  setProgress(p){this.progress=p;}
+  setElapsed(t){this.elapsed=t;}
+  setGroove(v){this.groove=!!v;}
+  poke(){this.pokedUntil=performance.now()+950;this.lastFrame=-1;}
+  makeBug(dna){
+    const rng=mulberry32(dna.sprite),species=Math.floor(rng()*18);
+    return {species,mask:maskFor(species),palette:PALETTES[Math.floor(rng()*PALETTES.length)],
+      eyes:Math.floor(rng()*5),mouth:Math.floor(rng()*6),spots:Math.floor(rng()*5),
+      temperament:Math.floor(rng()*6),head:Math.floor(rng()*3),
+      feet:Math.floor(rng()*3),hair:Math.floor(rng()*4),flip:rng()>.5};
   }
-  px(ctx,x,y,w=1,h=1,color=INK){ctx.fillStyle=color;ctx.fillRect(Math.round(x),Math.round(y),w,h);}
-  text(ctx,content,x,y,color=GLOW,size=7){ctx.fillStyle=color;ctx.font=`bold ${size}px monospace`;ctx.textAlign='center';ctx.fillText(content,x,y);}
-  star(ctx,x,y,s=2,color=GLOW){this.px(ctx,x-s,y,2*s,s,color);this.px(ctx,x,y-s,s,4*s,color);}
+  rect(ctx,x,y,w,h,color){ctx.fillStyle=color;ctx.fillRect(Math.round(x),Math.round(y),Math.round(w),Math.round(h));}
+  star(ctx,x,y,color){this.rect(ctx,x-5,y,11,3,color);this.rect(ctx,x,y-4,3,11,color);}
   paint(ctx){
-    const ms=performance.now(),t=(ms-this.start)/1000;
-    this.px(ctx,0,0,this.width,this.height,SKY);
-    // 少ないタイルと星だけで、初期コンソールのステージを構成する。
-    this.px(ctx,9,19,174,1,'#344475');this.px(ctx,9,140,174,1,'#344475');
-    for(let i=0;i<7;i++){
-      const x=14+i*27;
-      this.px(ctx,x,148,13,2,'#344475');
+    const ms=performance.now(),t=(ms-this.start)/1000,frame=Math.floor(t*9);
+    // アニメーションの切替だけを9fps相当に制限。画素は平滑化しない。
+    if(frame===this.lastFrame&&ms>this.pokedUntil)return;
+    this.lastFrame=frame;
+    this.rect(ctx,0,0,192,160,SKY);
+    // 背景は家庭用8bitゲーム機風の少数色パターン。少し不穏な遊園地。
+    this.rect(ctx,5,18,182,1,'#733A80');
+    this.rect(ctx,5,139,182,1,'#733A80');
+    for(let i=0;i<12;i++)this.rect(ctx,6+i*16,144+(i%3===0?0:2),9,2,'#58325E');
+    for(let i=0;i<noiseDots.length;i++){
+      const [x,y]=noiseDots[i],flicker=(frame+i*7)%15<9;
+      this.rect(ctx,x,y,3,3,flicker?'#F4639D':'#7453A6');
     }
-    for(const [x,y] of [[22,40],[162,42],[35,96],[166,101],[69,29],[122,114]]){
-      this.px(ctx,x,y,2,2,'#485B8E');
-    }
-    const blink=Math.floor(t*2)%2===0;
-    if(blink){this.star(ctx,34,52,2,'#8EE4D3');this.star(ctx,155,73,2,'#FFE3A5');}
-    if(!this.dna)this.egg(ctx,t);
-    else this.creature(ctx,t,ms);
+    if(frame%10<5){this.star(ctx,35,53,'#C8F760');this.star(ctx,160,68,'#F4D365');}
+    // 装飾の毒々しいピクセル稲妻はテンポ同期・ランダム配置ではなくDNA固定。
+    if(this.dna){
+      const s=this.bug.species;
+      for(let i=0;i<3;i++){
+        const x=16+((i*79+s*23)%160),y=34+((s*19+i*33)%89);
+        this.rect(ctx,x,y,5,2,i%2?'#DBFF71':'#F871BC');
+        this.rect(ctx,x+2,y-2,2,6,i%2?'#DBFF71':'#F871BC');
+      }
+      this.drawBug(ctx,t,frame,ms);
+    }else this.egg(ctx,frame);
     if(this.mode==='recording'){
-      for(let k=0;k<5;k++)this.px(ctx,77+k*9,122-Math.floor(this.level*11),6,3+Math.floor(this.level*11),k%2?'#FFAFBF':'#FFE39A');
+      for(let k=0;k<8;k++)this.rect(ctx,61+k*9,122-Math.round(this.level*13),5,3+Math.round(this.level*13),k%2?'#FF5EAE':'#C7FC58');
     }
     if(this.mode==='playing'){
-      const count=20,active=Math.floor(this.progress*count);
-      for(let i=0;i<count;i++)this.px(ctx,24+i*7.3,133,4,3,i<=active?'#FAE18D':'#354776');
+      for(let k=0;k<20;k++)this.rect(ctx,21+k*7.6,133,5,3,k<=Math.floor(this.progress*20)?'#DDFF70':'#4F366E');
     }
   }
-  egg(ctx,t){
-    const cell=5,beat=Math.floor(t*3)%3;
-    const wobble=this.mode==='recording'?(beat===0?-2:beat===1?2:0):0;
-    const px=92+wobble,py=78;
-    const shape=[2,4,5,6,6,6,5,5,4,3];
-    for(let row=0;row<shape.length;row++)for(let x=-shape[row];x<=shape[row];x++){
-      const xx=px+x*cell,yy=py+(row-shape.length/2)*cell;
-      const edge=Math.abs(x)===shape[row]||row===0||row===shape.length-1;
-      this.px(ctx,xx,yy,cell,cell,edge?'#19203F':'#FFE5AD');
+  egg(ctx,frame){
+    const jiggle=this.mode==='recording'?((frame%3)-1)*3:0;
+    const x=96+jiggle,y=81,r=[2,4,6,7,8,8,8,8,7,6,5,3];
+    for(let j=0;j<r.length;j++)for(let i=-r[j];i<=r[j];i++){
+      const edge=Math.abs(i)===r[j]||j===0||j===r.length-1;
+      this.rect(ctx,x+i*4,y+(j-6)*4,4,4,edge?'#0B0A25':j%3===0?'#F773B4':'#C9FF59');
     }
-    this.px(ctx,px-8,py-2,5,5,'#19203F');this.px(ctx,px+8,py-2,5,5,'#19203F');
-    this.px(ctx,px-2,py+9,5,3,'#D8859B');
-    if(beat!==1){this.star(ctx,37,83,2,'#F8A9CE');this.star(ctx,147,60,2,'#88DACF');}
-    this.text(ctx,this.mode==='recording'?'FEED ME!':'HELLO?',96,119,'#D4E8C9',8);
+    this.rect(ctx,x-15,y-4,7,9,INK);this.rect(ctx,x+8,y-4,7,9,INK);
+    this.rect(ctx,x-2,y+11,6,4,INK);
+    if(frame%9<5){this.star(ctx,32,86,'#F5E16F');this.star(ctx,161,64,'#A6EBDB');}
   }
-  creature(ctx,t,now){
-    const s=this.sprite,p=s.palette,unit=5;
-    const playing=this.mode==='playing';
-    const poked=now<this.pokedUntil;
-    const beat=playing?(this.groove?this.elapsed*(this.dna.bpm/60):t*.78):t*.75;
-    const step=Math.floor(beat*2);
-    const bouncy=playing?Math.sin(beat*Math.PI*2):Math.sin(t*1.9);
-    const hop=poked?11:playing?Math.max(0,bouncy)*(this.groove?11:5):Math.max(0,bouncy)*3;
-    const sway=(step%4===0?-2:step%4===2?2:0)+(s.personality===2?Math.round(Math.sin(t*2)*2):0);
-    const centerX=96+sway,baseY=86-hop;
-    const top=baseY-Math.floor(s.shape.length/2)*unit;
-    // 短い影でジャンプの高さを分かりやすくする。
-    this.px(ctx,70,125,52,3,'#4A5487');
-    this.px(ctx,78,128,37,2,'#2B3767');
-    // 手足・羽を体の後ろに描く。
-    const flap=step%2?4:-5;
-    if(s.kind==='wings'||s.kind==='star'){
-      this.px(ctx,centerX-52,top+25+flap,20,12,p.shadow);
-      this.px(ctx,centerX+34,top+25-flap,20,12,p.shadow);
-      this.px(ctx,centerX-46,top+28+flap,10,6,p.spot);
-      this.px(ctx,centerX+37,top+28-flap,10,6,p.spot);
-    }else if(s.kind==='crab'){
-      this.px(ctx,centerX-50,top+32+flap,19,6,p.body);
-      this.px(ctx,centerX+34,top+32-flap,19,6,p.body);
-      this.px(ctx,centerX-53,top+20+flap,12,13,p.cheek);
-      this.px(ctx,centerX+46,top+20-flap,12,13,p.cheek);
-    }else{
-      this.px(ctx,centerX-42,top+30+flap/2,14,8,p.shadow);
-      this.px(ctx,centerX+30,top+30-flap/2,14,8,p.shadow);
+  drawBug(ctx,t,frame,ms){
+    const b=this.bug,p=b.palette,playing=this.mode==='playing',hit=ms<this.pokedUntil;
+    const beat=playing?this.elapsed*this.dna.bpm/60:t*.9;
+    const motion=Math.floor(beat*2.1),phase=motion%4;
+    const hop=hit?13:playing?[1,8,3,0][phase]*this.dna.bugEnergy:((frame%9===0)?3:0);
+    const wobble=[-2,0,3,0][(phase+b.temperament)%4];
+    const tilt=b.temperament===3?(phase%2?2:-2):0;
+    const originX=Math.round(96-10*cell+wobble+tilt),originY=Math.round(83-8*cell-hop);
+    const x0=originX,y0=originY;
+    this.rect(ctx,67,125,57,3,'#603B7D');
+    this.rect(ctx,75,128,43,2,'#362550');
+    // 触角・耳・羽・足は最初に描くことで身体の背面になる。
+    const draw=(x,y,w,h,color)=>this.rect(ctx,x0+x*cell,y0+y*cell,w*cell,h*cell,color);
+    const flap=phase%2===0?-2:2;
+    if([4,6,17].includes(b.species)){
+      draw(-4+flap,6,5,2,p.shade);draw(20-flap,6,5,2,p.shade);
+      draw(-6+flap,5,2,4,p.skin);draw(24-flap,5,2,4,p.skin);
     }
-    // 体型の定義は横幅だけ。行ごとに輪郭線と胴体色を分ける。
-    for(let row=0;row<s.shape.length;row++){
-      const radius=s.shape[row];
-      for(let x=-radius;x<=radius;x++){
-        const edge=Math.abs(x)===radius||row===0||row===s.shape.length-1;
-        let fill=edge?INK:p.body;
-        if(!edge && row>s.shape.length*.62 && (x+row)%3===0)fill=p.spot;
-        this.px(ctx,centerX+x*unit,top+row*unit,unit,unit,fill);
+    if([2,8,14].includes(b.species)||b.hair===3){
+      draw(5,-3,2,5,p.shade);draw(14,-4,2,6,p.shade);
+      draw(4,-5,4,3,p.cheek);draw(14,-5,4,3,p.shine);
+    }
+    if(b.species===3){
+      for(let a=0;a<4;a++)draw(4+a*4,12+Math.round(Math.sin(beat*4+a)*1.5),2,5,p.shade);
+    }
+    if(b.species===9||b.species===17){
+      for(let a=0;a<3;a++){
+        draw(-3,4+a*3,4,1,p.shade);draw(20,4+a*3,4,1,p.shade);
       }
     }
-    // 特徴的な耳・花・触角。手作り形状を保ち、DNAで長さを変える。
-    const ear=s.earHeight*unit;
-    if(['ears','cat','frog'].includes(s.kind)){
-      const outside=s.kind==='frog'?27:25;
-      this.px(ctx,centerX-outside,top-ear,10,ear+5,INK);
-      this.px(ctx,centerX+outside-5,top-ear,10,ear+5,INK);
-      this.px(ctx,centerX-outside+2,top-ear+3,6,ear-3,s.kind==='cat'?p.cheek:p.body);
-      this.px(ctx,centerX+outside-3,top-ear+3,6,ear-3,p.body);
+    if(b.feet===0){draw(4,15+phase%2,4,2,p.shade);draw(13,15+(phase+1)%2,4,2,p.shade);}
+    if(b.feet===1){draw(6,15+phase%2,3,3,p.shade);draw(12,15+phase%2,3,3,p.shade);}
+    // 格子状の生物は外周に濃色を必ず置く。内部はDNA由来の斑点を配置。
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+      if(!b.mask[y][x])continue;
+      const edge=[[x-1,y],[x+1,y],[x,y-1],[x,y+1]].some(([a,c])=>!b.mask[c]?.[a]);
+      const pattern=(x*7+y*11+b.species*13)%9;
+      const color=edge?INK:(b.spots&&pattern<b.spots&&y>8)?p.shade:((x+y)%13===0?p.shine:p.skin);
+      draw(x,y,1,1,color);
     }
-    if(['sprout','antenna','flower'].includes(s.kind)||s.kind==='star'){
-      this.px(ctx,centerX-3,top-17,6,17,INK);
-      this.px(ctx,centerX-15,top-22,13,9,p.body);
-      this.px(ctx,centerX+3,top-19,12,9,p.shadow);
-    }
-    if(s.kind==='robot'){
-      this.px(ctx,centerX-3,top-16,6,16,INK);
-      this.px(ctx,centerX-6,top-21,13,7,p.cheek);
-    }
-    if(s.kind==='shell'){
-      for(let i=0;i<3;i++)this.px(ctx,centerX+15+i*5,top+27-i*4,4,5,p.shadow);
-    }
-    // 表情: 時間でまばたき、音のエネルギーで口が開閉、タップで驚いた表情。
-    const eyesY=top+(s.kind==='ghost'?3:4)*unit;
-    const eyeOffset=s.eyeSpace*unit;
-    const blink=!poked && (Math.floor(t*1.45+s.eyeStyle*1.5)%9===0)&&((t*1.45)%1<.20);
-    if(blink){
-      this.px(ctx,centerX-eyeOffset,eyesY+5,9,3,INK);
-      this.px(ctx,centerX+eyeOffset-5,eyesY+5,9,3,INK);
+    // ユニークな顔：瞳1～3つ、目つき、瞬き、歯、舌などを組み合わせる。
+    const blink=!hit&&frame%42===b.species%42;
+    const eyeY=b.species===5?8:6;
+    const eye=(x,y,w=3,h=3)=>{
+      if(blink){draw(x,y+Math.floor(h/2),w,1,INK);return;}
+      draw(x,y,w,h,INK);
+      if(w>=5){
+        // 一つ目の個体も「黒い穴」に見えないよう、虹彩と瞳を明示する。
+        draw(x+1,y+1,w-2,h-2,p.shine);
+        draw(x+Math.floor(w/2),y+Math.floor(h/2),1,1,INK);
+        draw(x+1,y+1,1,1,'#FFFFFF');
+      }else{
+        draw(x+(b.eyes%2),y,1,1,p.shine);
+        if(h>=4)draw(x+1,y+2,1,1,p.shine);
+      }
+    };
+    if(b.eyes===2){eye(8,eyeY,5,5);}
+    else if(b.eyes===4){eye(4,eyeY,3,3);eye(9,eyeY-2,3,3);eye(14,eyeY,3,3);}
+    else {eye(5,eyeY,b.eyes===3?2:3,b.eyes===1?4:3);eye(13,eyeY,b.eyes===3?2:3,b.eyes===1?4:3);}
+    if(b.spots>0){draw(2,10,2,1,p.cheek);draw(17,10,2,1,p.cheek);}
+    const open=hit||playing&&(phase===0||this.level>.33);
+    if(open){
+      draw(9,11,3,3,INK);draw(10,12,1,2,p.cheek);
     }else{
-      this.px(ctx,centerX-eyeOffset,eyesY,10,11,INK);
-      this.px(ctx,centerX+eyeOffset-5,eyesY,10,11,INK);
-      // 瞳のハイライトは静かな液晶表現を崩さず愛嬌を増す。
-      this.px(ctx,centerX-eyeOffset+2,eyesY+2,4,4,p.spot);
-      this.px(ctx,centerX+eyeOffset-3,eyesY+2,4,4,p.spot);
+      if(b.mouth===0){draw(9,12,3,1,INK);draw(10,13,1,1,INK);}
+      if(b.mouth===1){draw(8,12,5,1,INK);draw(9,13,3,1,p.shine);}
+      if(b.mouth===2){draw(9,12,3,2,INK);}
+      if(b.mouth===3){draw(8,12,2,1,INK);draw(12,12,2,1,INK);draw(10,13,2,1,INK);}
+      if(b.mouth===4){draw(8,12,6,2,INK);draw(9,12,1,1,p.shine);draw(12,12,1,1,p.shine);}
+      if(b.mouth===5){draw(9,12,4,1,INK);draw(11,13,2,2,p.cheek);}
     }
-    if(s.mark!==0){
-      this.px(ctx,centerX-eyeOffset-12,eyesY+12,8,5,p.cheek);
-      this.px(ctx,centerX+eyeOffset+8,eyesY+12,8,5,p.cheek);
+    if(hit){
+      this.star(ctx,32,61,'#C6F64A');this.star(ctx,154,68,'#FF71B5');
+      this.rect(ctx,137,39,4,11,'#F5DB61');this.rect(ctx,137,53,4,4,'#F5DB61');
+    }else if(playing){
+      this.star(ctx,28+(phase*3),73-phase*4,p.cheek);
+      this.star(ctx,159-phase*3,52+phase*4,p.shine);
     }
-    const mouthY=eyesY+20;
-    if(poked){
-      this.px(ctx,centerX-3,mouthY,9,11,INK);
-      this.px(ctx,centerX-1,mouthY+6,5,3,p.cheek);
-    }else if(playing && (step%3===0||this.level>.33)){
-      this.px(ctx,centerX-4,mouthY,10,9,INK);
-      this.px(ctx,centerX-1,mouthY+5,4,3,p.cheek);
-    }else if(s.mouth===0){
-      this.px(ctx,centerX-7,mouthY,5,3,INK);this.px(ctx,centerX+3,mouthY,5,3,INK);
-      this.px(ctx,centerX-2,mouthY+4,5,3,INK);
-    }else if(s.mouth===1){
-      this.px(ctx,centerX-6,mouthY,13,4,INK);this.px(ctx,centerX-2,mouthY+4,6,4,INK);
-    }else{
-      this.px(ctx,centerX-3,mouthY,8,5,INK);
-    }
-    const footY=top+s.shape.length*unit-2;
-    const foot=playing&&step%2?6:0;
-    if(s.feet!==2){
-      this.px(ctx,centerX-27,footY,13,5+foot,p.shadow);
-      this.px(ctx,centerX+16,footY,13,11-foot,p.shadow);
-    }else{
-      this.px(ctx,centerX-19,footY,14,6,p.shadow);
-      this.px(ctx,centerX+7,footY,14,6,p.shadow);
-    }
-    if((playing&&this.groove)||poked){
-      const phase=Math.floor(beat)%4;
-      this.star(ctx,31+phase*2,70-phase*3,2,p.cheek);
-      this.star(ctx,154-phase*2,57+phase*4,2,p.spot);
-      if(poked)this.text(ctx,'!',135,43,'#FFE2AA',12);
-    }
-    // 名前は個体の愛称。小さな図鑑を見ている感覚を作る。
-    this.text(ctx,s.name,96,120,'#D2D7FA',8);
   }
 }

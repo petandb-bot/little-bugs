@@ -1,5 +1,5 @@
-// ページ更新後に古いv0.2のアプリが居座らないよう、HTML/JS/CSSはnetwork-firstで更新する。
-const CACHE='little-bugs-v0.3.0';
+// v0.4で古いキャッシュを掃除し、ネットワーク優先で最新版へ更新する。
+const CACHE='little-bugs-v0.4.0';
 const FILES=['./','./index.html','./style.css','./app.js','./audio-engine.js','./visual.js','./manifest.webmanifest','./assets/icon-192.png','./assets/icon-512.png','./assets/apple-touch-icon.png'];
 self.addEventListener('install',event=>event.waitUntil(
   caches.open(CACHE).then(cache=>cache.addAll(FILES)).then(()=>self.skipWaiting())

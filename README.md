@@ -1,28 +1,20 @@
-# LITTLE BUGS — v0.3
+# LITTLE BUGS v0.4
 
-An 8-bit voice toy. Record your voice and turn it into surprising little musical loops. Each loop hatches a different pixel pet.
+A strange, cute 8-bit voice toy. Record a sound and hatch experimental musical loops with animated pixel creatures.
 
-## How to Play
+## Play
 
-1. **REC** — Record your voice or a sound (up to 12 seconds).
-2. **STOP** — Finish recording.
-3. **HATCH** — Make a new loop and creature. Tap again for another variation.
-4. **PLAY** — Start or stop the loop. Tap the creature to see it react.
-5. **GROOVE** — Turn tiny accompanying sounds ON or OFF, even during playback.
-6. **SAVE** — Export the current result as a stereo WAV file.
+1. **REC / STOP** — Record up to 12 seconds of voice or sound.
+2. **HATCH** — Create a new loop and a new creature. Repeat for more variations.
+3. **PLAY / STOP** — Loop the result. Tap the creature to make it react.
+4. **GROOVE** — Switch tiny accompanying sounds on or off.
+5. **SAVE** — Export the current loop as a stereo WAV file.
 
-## Publish on GitHub Pages
+## Publish with GitHub Pages
 
-1. Upload all files and folders (not the ZIP) to the root of your repository. `index.html` must be at the top level.
-2. Open **Settings → Pages**.
-3. Choose **Deploy from a branch → main → /(root)** and save.
-4. Open the published URL shown on that page.
+1. Upload the **unzipped files** to the root of your GitHub repository.
+2. Go to **Settings → Pages → Deploy from a branch**.
+3. Select **main / (root)** and click **Save**.
+4. Open the published URL. On iPhone, use Safari → Share → Add to Home Screen.
 
-On iPhone, open the site in Safari and select **Share → Add to Home Screen**.
-
-## Notes
-
-- Microphone recording needs HTTPS or localhost.
-- Audio stays on your device; no server or account is required.
-- GROOVE is optional. Exported WAV files reflect its current ON/OFF setting.
-- Reload the page after publishing a new version. A fresh microphone test on your device is recommended.
+Microphone access requires HTTPS or localhost. Audio stays on your device. If an older version appears after updating, reload the page or remove the old Home Screen shortcut.
