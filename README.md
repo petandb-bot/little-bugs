@@ -1,22 +1,21 @@
-# LITTLE BUGS v0.5
+# LITTLE BUGS v0.6 — Voice Phrase Engine
 
-A weird 8-bit voice toy that turns recordings into looping rhythms.
+A playful voice-mutation toy for your browser. Record a phrase and hatch an unexpected looping creature.
 
 ## Play
 
-1. Tap **REC** and record a voice or sound (up to 12 seconds).
-2. Tap **STOP** to finish.
-3. Tap **HATCH** to generate a new rhythm and creature. Repeat for variations.
-4. Tap **PLAY** to loop. Tap it again to stop.
-5. Turn **GROOVE** ON for punchy drum support or OFF for voice-only loops.
-6. Tap **SAVE** to export a WAV file. Tap the creature to surprise it.
+1. Tap **REC**, speak or sing, then tap **STOP** (12 seconds maximum).
+2. Tap **HATCH** to create a loop. Tap again for another variation.
+3. Tap **PLAY** to start or stop looping.
+4. Switch **GROOVE** ON for a few extra electronic accents, or OFF for voice only.
+5. Tap **SAVE** to export a WAV file. Tap the creature to make it react.
 
-## Publish on GitHub Pages
+## Publish
 
-Upload all files in this ZIP to your repository's root (not the ZIP itself). Go to **Settings → Pages**, choose **Deploy from a branch**, **main**, and **/(root)**, then save. Open the URL shown in Pages. Add it to your iPhone Home Screen using Safari's Share menu.
+Unzip the project and upload its contents to the root of your GitHub repository. Under **Settings → Pages**, select **Deploy from a branch → main → /(root)**. Open the published URL in Safari and choose **Add to Home Screen** for an app-like experience.
 
-Microphone access requires HTTPS or localhost. Audio processing stays on your device. Browser support and file-sharing behavior vary.
+Recording requires HTTPS or localhost. Audio is processed on your device. iPhone support depends on Safari and iOS versions.
 
-## Local test
+## Test
 
-Run `npm test` with Node.js 22 or later. No build step is needed for GitHub Pages.
+Run `npm test` with Node.js 22 or later. No build step is required.

@@ -1,7 +1,7 @@
 {
-  "name": "LITTLE BUGS — Pocket Rhythm Engine",
+  "name": "LITTLE BUGS — Voice Phrase Engine",
   "short_name": "Little Bugs",
-  "description": "An 8-bit voice toy for experimental rap, beatbox and chanting loops.",
+  "description": "An 8-bit voice toy for experimental voice phrases and looping mutations.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

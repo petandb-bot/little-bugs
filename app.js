@@ -2,7 +2,7 @@ import {hatch, wavBlob, monoFromAudioBuffer, RATE, mixLayers} from './audio-engi
 import {BugVisual} from './visual.js';
 
 /**
- * LITTLE BUGS v0.5 — recording, live GROOVE switch and export
+ * LITTLE BUGS v0.6 — recording, live GROOVE switch and export
  *
  * データは端末上のメモリーにのみ保持します。
  * iOS Safari の MediaRecorder は MP4/AAC を使う場合があるため、
@@ -96,7 +96,7 @@ function toggleGroove(){
     grooveGain.gain.cancelScheduledValues(now);
     grooveGain.gain.setTargetAtTime(grooveEnabled?1:0,now,.015);
   }
-  setStatus(grooveEnabled?'GROOVE ON — KICK / SNARE / SWING.':'GROOVE OFF — VOICE-ONLY BEAT.');
+  setStatus(grooveEnabled?'GROOVE ON — TINY SOUND ACCENTS.':'GROOVE OFF — VOICE ONLY.');
   syncUI();
 }
 function releaseMic() {
@@ -192,7 +192,7 @@ async function doHatch() {
   if(!original || renderInProgress || ['recording','requesting','loading'].includes(state)) return;
   stopPlayback();
   renderInProgress=true;state='hatching';
-  ui.stage.textContent='HATCHING…';setStatus('BUILDING A RHYTHM FROM YOUR VOICE…');syncUI();
+  ui.stage.textContent='HATCHING…';setStatus('MAKING A PHRASE FROM YOUR VOICE…');syncUI();
   // 大きな同期処理の前に画面を少なくとも1フレーム描画する。
   await new Promise(resolve=>requestAnimationFrame(()=>setTimeout(resolve,0)));
   try {
@@ -201,7 +201,7 @@ async function doHatch() {
     counter++;
     ui.counter.textContent=`NO. ${String(counter).padStart(4,'0')}`;
     ui.stage.textContent=`MUTATION NO. ${String(counter).padStart(4,'0')}`;
-    ui.dna.textContent=`VOICE LOOP / ${next.dna.bpm} BPM`;
+    ui.dna.textContent=`PHRASE LOOP / ${next.dna.bpm} BPM`;
     ui.time.textContent=clock(next.duration);
     ui.elapsed.textContent=`${next.duration.toFixed(1)} SEC LOOP`;
     visual.setDna(next.dna);
