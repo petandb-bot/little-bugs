@@ -2,7 +2,7 @@ import {hatch, wavBlob, monoFromAudioBuffer, RATE, mixLayers} from './audio-engi
 import {BugVisual} from './visual.js';
 
 /**
- * LITTLE BUGS v0.8 — recording, live GROOVE switch and export
+ * LITTLE BUGS v0.9 — recording, live GROOVE switch and export
  *
  * データは端末上のメモリーにのみ保持します。
  * iOS Safari の MediaRecorder は MP4/AAC を使う場合があるため、
@@ -113,7 +113,7 @@ function toggleGroove(){
     grooveGain.gain.cancelScheduledValues(now);
     grooveGain.gain.setTargetAtTime(grooveEnabled?1:0,now,.015);
   }
-  setStatus(grooveEnabled?'GROOVE ON — VOICE-SYNCED ACCENTS.':'GROOVE OFF — VOICE ONLY.');
+  setStatus(grooveEnabled?'GROOVE ON — TINY ARCADE PULSE.':'GROOVE OFF — VOICE EFFECTS ONLY.');
   syncUI();
 }
 function releaseMic() {
@@ -136,7 +136,7 @@ async function startRecording() {
     if(!window.MediaRecorder) throw new Error('This browser does not support MediaRecorder.');
     const audio=await getContext();
     try {
-      mediaStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+      mediaStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:true,autoGainControl:false}});
     } catch (firstError) {
       // 端末が細かなオーディオ制約を拒否した場合だけ通常のマイク設定へ戻す。
       if(firstError.name==='OverconstrainedError' || firstError.name==='NotSupportedError') {
@@ -209,7 +209,7 @@ async function doHatch() {
   if(!original || renderInProgress || ['recording','requesting','loading'].includes(state)) return;
   stopPlayback();
   renderInProgress=true;state='hatching';
-  ui.stage.textContent='HATCHING…';setStatus('MAKING A PHRASE FROM YOUR VOICE…');syncUI();
+  ui.stage.textContent='HATCHING…';setStatus('FILTERING / MUTATING YOUR VOICE…');syncUI();
   // 大きな同期処理の前に画面を少なくとも1フレーム描画する。
   await new Promise(resolve=>requestAnimationFrame(()=>setTimeout(resolve,0)));
   try {

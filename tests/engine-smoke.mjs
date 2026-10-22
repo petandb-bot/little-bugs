@@ -101,4 +101,25 @@ const short=hatch({data:d.slice(Math.round(sr*.24),Math.round(sr*.56)),sampleRat
 assert(short.voice.left.every(Number.isFinite));
 const mono=monoFromAudioBuffer({numberOfChannels:1,length:sr,sampleRate:sr,getChannelData:()=>d.slice(0,sr)});
 assert(Number.isFinite(mono.rms));
-console.log('All v0.8 audio-engine tests passed.');
+console.log('All v0.9 audio-engine tests passed.');
+
+// v0.9 regression: 低周波ハム・小さな背景ノイズを、声の発音を残したまま低減。
+const noisy=new Float32Array(sr*2.5);
+let nb=71;
+for(let i=0;i<noisy.length;i++){
+  nb=(Math.imul(nb,1664525)+1013904223)>>>0;
+  const t=i/sr,noise=(nb/2147483648-1)*.007;
+  const speech=t>.6&&t<1.8?.20*Math.sin(2*Math.PI*175*t):0;
+  noisy[i]=noise+.05*Math.sin(2*Math.PI*57*t)+speech;
+}
+const cleaned=monoFromAudioBuffer({numberOfChannels:1,length:noisy.length,sampleRate:sr,getChannelData:()=>noisy});
+function sectionRms(data,a,b){let v=0,n=0;for(let i=Math.round(a*sr);i<Math.round(b*sr);i+=3){v+=data[i]*data[i];n++;}return Math.sqrt(v/n);}
+const inputRatio=sectionRms(noisy,.15,.45)/sectionRms(noisy,.8,1.1);
+const cleanedRatio=sectionRms(cleaned.data,.15,.45)/sectionRms(cleaned.data,.8,1.1);
+assert(cleanedRatio<inputRatio*.60,`Quiet/noisy sections attenuated: ${cleanedRatio.toFixed(3)} vs ${inputRatio.toFixed(3)}`);
+assert(sectionRms(cleaned.data,.8,1.1)>.035,'Voice preserved after denoising');
+for(const id of ['PHRASE','MANTRA','RAP','CHOIR']){
+  assert(hatch(input,8390,id).analysis.cutUpHits>=2,`${id} has a repeating vocal cut-up motif`);
+}
+assert.equal(hatch(input,8390,'BROKEN').analysis.cutUpHits,0,'Broken voice retains a different algorithm');
+console.log('Noise cleanup and vocal cut-up regression passed.');

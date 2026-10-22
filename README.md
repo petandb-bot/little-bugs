@@ -1,18 +1,20 @@
-# LITTLE BUGS v0.8 — Voice-Linked Groove
+# LITTLE BUGS v0.9 — Filter Echo Groove
 
-A strange 8-bit voice toy. Record a voice and hatch it into a rhythmic loop.
+Record a voice and hatch it into a playful, experimental loop.
 
 ## Play
 
-1. Tap **REC**, speak or sing (up to 12 seconds), then tap **STOP**.
-2. Tap **HATCH** to create a loop; repeat to discover new mutations.
-3. Tap **PLAY** to loop or stop. Switch **GROOVE** to add or remove small voice-synced sounds.
-4. Tap **SAVE** to export a stereo WAV. Tap the bug to make it react.
+1. Press **REC**, speak or sing (up to 12 seconds), then press **STOP**.
+2. Press **HATCH** to transform your recording. Press it again for a different result.
+3. Press **PLAY** to loop. Turn **GROOVE** on or off for a few extra arcade sounds.
+4. Press **SAVE** to export a WAV file. Tap the creature to make it react.
 
-Audio stays on your device. Five mutation styles cycle automatically.
+The new engine uses vocal cut-ups, tempo-synced filters and multi-tap echoes. It applies gentle noise cleanup before processing. Audio stays on your device.
 
-## Publish on GitHub Pages
+## Publish
 
-Unzip the package. Upload **all files and folders** to the root of your repository's `main` branch. Go to **Settings → Pages → Deploy from a branch → main → /(root)** and save. Open the published HTTPS link; use **Add to Home Screen** on iPhone.
+Unzip and upload all files to the root of your GitHub repository. In **Settings → Pages**, select **Deploy from a branch → main → /(root)**. Open the published HTTPS URL. On iPhone, use **Add to Home Screen**.
 
-To run audio checks locally: `npm test` (Node.js 22+). The microphone requires HTTPS or localhost. Safari recording and sharing should be verified on the target iPhone.
+## Test
+
+Run `npm test` with Node.js 22+. Microphone and iPhone Safari behavior require device testing. This app is independently developed; no third-party audio plug-in is included.
