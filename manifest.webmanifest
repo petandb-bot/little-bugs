@@ -1,7 +1,7 @@
 {
-  "name": "LITTLE BUGS — Filter Echo Groove",
+  "name": "LITTLE BUGS — Mutant Motion",
   "short_name": "Little Bugs",
-  "description": "An 8-bit voice toy for strange rhythmic voice mutations.",
+  "description": "An 8-bit voice toy with moving echoes, rhythmic mutations and small synth melodies.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

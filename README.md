@@ -1,20 +1,22 @@
-# LITTLE BUGS v0.9 — Filter Echo Groove
+# LITTLE BUGS v1.0 — Mutant Motion
 
-Record a voice and hatch it into a playful, experimental loop.
+A tiny voice-to-music arcade. Record a sound, hatch a strange loop, and meet a pixel creature.
 
 ## Play
 
-1. Press **REC**, speak or sing (up to 12 seconds), then press **STOP**.
-2. Press **HATCH** to transform your recording. Press it again for a different result.
-3. Press **PLAY** to loop. Turn **GROOVE** on or off for a few extra arcade sounds.
-4. Press **SAVE** to export a WAV file. Tap the creature to make it react.
+1. Tap **REC**, speak or sing (up to 12 seconds), then tap **STOP**.
+2. Tap **HATCH** to create a new loop. Tap it again for another mutation.
+3. Tap **PLAY** to listen. **GROOVE** adds or removes a small synth accompaniment.
+4. Tap **SAVE** to export a stereo WAV. Tap the creature to make it jump.
 
-The new engine uses vocal cut-ups, tempo-synced filters and multi-tap echoes. It applies gentle noise cleanup before processing. Audio stays on your device.
+The app uses moving stereo echoes, rhythmic vocal effects, and simple synth melodies. Your recording stays on your device.
 
-## Publish
+## Publish on GitHub Pages
 
-Unzip and upload all files to the root of your GitHub repository. In **Settings → Pages**, select **Deploy from a branch → main → /(root)**. Open the published HTTPS URL. On iPhone, use **Add to Home Screen**.
+Upload the unzipped files (including `index.html`) to the repository root. Open **Settings → Pages** and select **Deploy from a branch → main → /(root)**. Visit the published HTTPS site. On iPhone, open it in Safari and choose **Add to Home Screen**.
 
-## Test
+## Check
 
-Run `npm test` with Node.js 22+. Microphone and iPhone Safari behavior require device testing. This app is independently developed; no third-party audio plug-in is included.
+Run `npm test` with Node.js 22+. Microphone recording and WAV sharing should also be checked on your own device.
+
+This project is independently developed; it does not contain commercial audio plug-ins.

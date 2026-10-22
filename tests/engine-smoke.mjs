@@ -29,8 +29,8 @@ assert(fundamental===null||(fundamental>=105&&fundamental<=380),'Estimated pitch
 const onsets=[{time:.2,end:.67,duration:.47,gain:.8},{time:1.35,end:1.8,duration:.45,gain:.8},{time:2.68,end:3.11,duration:.43,gain:.7}];
 const groovePlan=planGrooveEvents(onsets,{bpm:120},123,4.2,176);
 assert(groovePlan.length>=2,'Audible number of accents');
-assert(groovePlan.every(e=>Number.isFinite(e.frequency)&&e.frequency>=220),'Tone frequencies safe');
-assert(groovePlan.every(e=>Math.abs(e.time-e.voiceTime)<.91),'All groove notes follow a voice event');
+assert(groovePlan.every(e=>Number.isFinite(e.frequency)&&e.frequency>=95),'Synth note frequencies safe');
+assert(groovePlan.some(e=>e.kind==='pluck') && groovePlan.some(e=>e.kind==='pad') && groovePlan.some(e=>e.kind==='bass'),'Groove includes independent melodic/harmonic/bass roles');
 
 const ids=['PHRASE','MANTRA','RAP','CHOIR','BROKEN'];
 const seeds=new Map();
@@ -50,9 +50,12 @@ for(const [id,s] of seeds){
   assert.equal(result.dna.id,id);
   assert(result.duration>=6.8&&result.duration<=14.81,'Phrase-sized loops');
   assert.equal(result.analysis.phraseCount,analyzed.phrases.length);
-  assert(result.analysis.grooveHits>=1 && result.analysis.grooveHits<=12,'Groove stays sparse');
+  assert(result.analysis.grooveHits>=12 && result.analysis.grooveHits<=36,'Synth events planned');
   assert(result.groove.events.every(x=>x.time>=0 && x.time<result.duration),'Groove events within loop');
-  assert(result.groove.events.every(x=>Math.abs(x.time-x.voiceTime)<1.2),'Groove tied to a voice attack or response');
+  assert(result.groove.events.some(x=>x.kind==='pluck') && result.groove.events.some(x=>x.kind==='pad'),'Groove melodic and harmonic');
+  assert(result.analysis.stepFX>=1,'Audible vocal mutations scheduled');
+  assert(['PING-PONG','DUB-SKIP','WOBBLE-TAPE','GHOST-TAPS'].includes(result.analysis.echoMode));
+  assert(['orbit','step','trigger'].includes(result.analysis.panMode));
 
   assert.equal(hash(result.voice.left),hash(same.voice.left),'Deterministic voice per seed');
   assert.equal(hash(result.groove.left),hash(same.groove.left),'Deterministic groove per seed');
@@ -62,7 +65,7 @@ for(const [id,s] of seeds){
   assert.notEqual(hash(wet.left),hash(dry.left),'GROOVE ON changes audio');
   const voiceVolume=rms(result.voice),grooveVolume=rms(result.groove);
   assert(voiceVolume>.024&&voiceVolume<.43,`Voice audible ${voiceVolume}`);
-  assert(grooveVolume/voiceVolume>.05&&grooveVolume/voiceVolume<.32,`GROOVE sparse ${grooveVolume/voiceVolume}`);
+  assert(grooveVolume/voiceVolume>.075&&grooveVolume/voiceVolume<.37,`GROOVE sparse ${grooveVolume/voiceVolume}`);
   for(const arr of [dry.left,dry.right,wet.left,wet.right]){
     assert(arr.every(Number.isFinite),'Finite samples');
     assert(arr.every(x=>Math.abs(x)<=.971),'Limiter');
@@ -101,7 +104,7 @@ const short=hatch({data:d.slice(Math.round(sr*.24),Math.round(sr*.56)),sampleRat
 assert(short.voice.left.every(Number.isFinite));
 const mono=monoFromAudioBuffer({numberOfChannels:1,length:sr,sampleRate:sr,getChannelData:()=>d.slice(0,sr)});
 assert(Number.isFinite(mono.rms));
-console.log('All v0.9 audio-engine tests passed.');
+console.log('All v1.0 audio-engine tests passed.');
 
 // v0.9 regression: 低周波ハム・小さな背景ノイズを、声の発音を残したまま低減。
 const noisy=new Float32Array(sr*2.5);
@@ -123,3 +126,28 @@ for(const id of ['PHRASE','MANTRA','RAP','CHOIR']){
 }
 assert.equal(hatch(input,8390,'BROKEN').analysis.cutUpHits,0,'Broken voice retains a different algorithm');
 console.log('Noise cleanup and vocal cut-up regression passed.');
+// 移動するエフェクトのイベントと独立した旋律の関係を検証。
+import {applyStepMutations,applyMovingPan,applyToyDelay,planToyMusic,renderToyMusic} from '../music-fx.js';
+const TAU_TEST=2*Math.PI;
+const musicPlan=planToyMusic(onsets,{bpm:130},93848,8,176);
+assert(musicPlan.events.filter(x=>x.kind==='pluck').length>=9,'Playable synth motif repeats');
+assert(new Set(musicPlan.events.filter(x=>x.kind==='pluck').map(x=>Math.round(x.frequency))).size>=3,'Synth has melodic contour');
+assert(musicPlan.events.some(x=>x.kind==='bass') && musicPlan.events.some(x=>x.kind==='pad'),'Music has harmonic foundation');
+const music=renderToyMusic(musicPlan,8,92737);
+assert(music.left.every(Number.isFinite) && music.right.some(x=>x!==0),'Synth render finite and audible');
+const fxIn={left:new Float32Array(44100*2),right:new Float32Array(44100*2)};
+for(let i=0;i<fxIn.left.length;i++){
+  const t=i/44100,env=(t>.2&&t<1.8)?.2:0;
+  fxIn.left[i]=Math.sin(t*TAU_TEST*190)*env;
+  fxIn.right[i]=fxIn.left[i];
+}
+const fxEvents=[{time:.2,end:1.2,duration:1,gain:.9},{time:1.25,end:1.7,duration:.45,gain:.8}];
+const fxDna={bpm:135,id:'BROKEN'};
+const acts=applyStepMutations(fxIn,fxDna,919,fxEvents);
+assert(acts.length>0 && acts.some(a=>['stutter','reverse','half','crush','gate'].includes(a.type)),'Effect sequencer events');
+const panMode=applyMovingPan(fxIn,fxDna,819,fxEvents);
+assert(['orbit','step','trigger'].includes(panMode));
+assert.notEqual(hash(fxIn.left),hash(fxIn.right),'Moving pan creates stereo variation');
+const echoMode=applyToyDelay(fxIn,fxDna,832);
+assert(typeof echoMode==='string' && fxIn.left.every(Number.isFinite),'Echo render remains finite');
+console.log('Moving effects and toy synth regression passed.');

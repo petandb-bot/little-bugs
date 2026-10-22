@@ -2,7 +2,7 @@ import {hatch, wavBlob, monoFromAudioBuffer, RATE, mixLayers} from './audio-engi
 import {BugVisual} from './visual.js';
 
 /**
- * LITTLE BUGS v0.9 — recording, live GROOVE switch and export
+ * LITTLE BUGS v1.0 — recording, live GROOVE switch and export
  *
  * データは端末上のメモリーにのみ保持します。
  * iOS Safari の MediaRecorder は MP4/AAC を使う場合があるため、
@@ -209,7 +209,7 @@ async function doHatch() {
   if(!original || renderInProgress || ['recording','requesting','loading'].includes(state)) return;
   stopPlayback();
   renderInProgress=true;state='hatching';
-  ui.stage.textContent='HATCHING…';setStatus('FILTERING / MUTATING YOUR VOICE…');syncUI();
+  ui.stage.textContent='HATCHING…';setStatus('MUTATING / ECHOING YOUR VOICE…');syncUI();
   // 大きな同期処理の前に画面を少なくとも1フレーム描画する。
   await new Promise(resolve=>requestAnimationFrame(()=>setTimeout(resolve,0)));
   try {

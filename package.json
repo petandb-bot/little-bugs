@@ -1,9 +1,9 @@
 {
   "name": "little-bugs-voice-pets",
-  "version": "0.9.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Rhythmic filter and multi-tap echo voice toy with gentle input noise cleanup.",
+  "description": "Moving stereo effects, rhythmic mutations, and synth groove from recorded voice.",
   "scripts": {
     "test": "node ./tests/engine-smoke.mjs"
   }

@@ -1,5 +1,6 @@
+import {applyStepMutations,applyMovingPan,applyToyDelay,planToyMusic,renderToyMusic,duckSynthAgainstVoice} from './music-fx.js';
 /**
- * LITTLE BUGS v0.9 — FILTER / ECHO GROOVE
+ * LITTLE BUGS v1.0 — MUTANT MOTION
  *
  * 設計原則：短い声をドラム用の極小断片に分解するのではなく、
  * 先に息継ぎ・無音・発音のまとまりからフレーズを抽出する。
@@ -563,8 +564,9 @@ function buildVoice(input,analysis,dna,rng,frames,cell,voicePitch){
   }
   // 変形の後でテンポ同期の動的フィルターとマルチタップ・ディレイを実行。
   // 声のカットアップとエフェクトが同じ時間グリッドを共有する。
-  applyRhythmicFilter(out,dna,mulberry32(dna.seed^0x71F11E));
-  applyRhythmEcho(out,dna,mulberry32(dna.seed^0xEC40));
+  out.effectActions=applyStepMutations(out,dna,dna.seed^0x61B9,out.events,RATE);
+  out.panMode=applyMovingPan(out,dna,dna.seed^0x1A981,out.events,RATE);
+  out.echoMode=applyToyDelay(out,dna,dna.seed^0xEC40,RATE);
   return out;
 }
 
@@ -573,69 +575,16 @@ function buildVoice(input,analysis,dna,rng,frames,cell,voicePitch){
  * ボイスフレーズを覆わないよう短い音だけ。BPMと声の推定基音を共有する。
  * サンプル音源を増やさず、純粋な波形合成でブラウザー内で完結させる。
  */
-function smallTone(out,at,type,rng,gain,freq=300){
-  const length={plop:.115,click:.044,blip:.105}[type];
-  const start=Math.round(at*RATE),size=out.left.length,n=Math.round(length*RATE);
-  let phase=0,lp=0;
-  for(let i=0;i<n;i++){
-    const t=i/RATE,noise=rng()*2-1;
-    let v=0;
-    if(type==='plop'){
-      // 低域がモゴモゴしない短い「ポコッ」。周波数は声の基音に近い音高から。
-      phase+=TAU*(freq*.78+freq*.28*Math.exp(-t*33))/RATE;
-      v=(Math.sin(phase)+.11*Math.sin(phase*2))*Math.exp(-t*34);
-    }else if(type==='click'){
-      lp+=.14*(noise-lp);
-      v=(noise-lp)*Math.exp(-t*110);
-    }else{
-      phase+=TAU*(freq*1.5+freq*.11*Math.sin(t*31))/RATE;
-      v=(Math.sin(phase)+.12*Math.sin(phase*2))*Math.exp(-t*29);
-    }
-    const atSample=start+i;
-    if(atSample<0||atSample>=size)continue;
-    const p=type==='blip'?.22:-.14;
-    out.left[atSample]+=v*Math.cos((p+1)*Math.PI/4)*gain;
-    out.right[atSample]+=v*Math.sin((p+1)*Math.PI/4)*gain;
-  }
-}
-/**
- * v0.3の控えめな電子玩具音へ回帰。1小節あたり約2-3音。
- * 音高を勝手に付けすぎず、声のメイン拍と共通のグリッドにだけ配置する。
- * 声のイベントをそのまま追尾しない。発話と無関係な旋律を避ける。
- */
+/** GROOVE の設計は voice と同じ拍・推定基音を使う。打音は加えない。 */
 export function planGrooveEvents(voiceEvents,dna,seed,duration,pitchHz=null){
-  const rng=mulberry32(seed^0x1B8AA5);
-  const beat=60/dna.bpm,cell=beat*4,events=[];
-  if(!voiceEvents?.length)return events;
-  const onset=voiceEvents.filter(e=>e.gain>=.45&&e.duration>=.15).sort((a,b)=>a.time-b.time);
-  // 最も早い有意な発話のグリッド位相へゆるく寄せる。
-  const phase=onset.length?clamp(onset[0].time%beat,0,beat*.33):0;
-  const basePitch=pitchHz?clamp(pitchHz*2**Math.round(Math.log2(310/pitchHz)),245,415):315;
-  for(let b=0;b<Math.ceil(duration/cell);b++){
-    const start=b*cell+phase;
-    const push=(offset,type,frequency,gain)=>{
-      const time=start+offset*beat;
-      if(time>=0&&time<duration-.16)events.push({time,type,frequency,gain,voiceTime:time-phase});
-    };
-    // 小さな「ポコッ」、小さなバックビート。キック・スネアは使わない。
-    push(0,'plop',basePitch*.84,.22);
-    if(b%2===0 || rng()<.6)push(1.95,'click',1800,.115);
-    // 半分の小節にだけ、上音の短いアクセント。
-    if(b%2===1 || rng()<.35)push(3.25,'blip',basePitch*(b%2?1.5:1.25),.085);
-    // 裏拍の跳ねを時々加えるが、ビートトラックにはしない。
-    if(b===3&&rng()<.75)push(2.75,'click',1800,.075);
-  }
-  return events;
+  return planToyMusic(voiceEvents,dna,seed,duration,pitchHz).events;
 }
-function buildGroove(input,analysis,dna,rng,frames,cell,voiceEvents,pitchHz){
-  const out=layers(frames);
-  if(!analysis.active){out.events=[];return out;}
-  const scheduled=planGrooveEvents(voiceEvents,dna,dna.seed,frames/RATE,pitchHz);
-  for(const e of scheduled){
-    smallTone(out,e.time,e.type,rng,e.gain,e.frequency);
-  }
-  // テストと後の拡張用。音声波形には影響しないメタデータ。
-  out.events=scheduled;
+function buildGroove(input,analysis,dna,rng,frames,cell,voice,pitchHz){
+  if(!analysis.active || !voice.events.length){const out=layers(frames);out.events=[];return out;}
+  const plan=planToyMusic(voice.events,dna,dna.seed^0x1876,frames/RATE,pitchHz);
+  const out=renderToyMusic(plan,frames/RATE,dna.seed^0x3652,RATE);
+  out.plan=plan;
+  duckSynthAgainstVoice(out,voice,RATE);
   return out;
 }
 /**
@@ -681,7 +630,7 @@ function cutRumble(layer,frequency){
   }
 }
 function normalize(voice,groove){
-  cutRumble(voice,95);cutRumble(groove,175);
+  cutRumble(voice,95);cutRumble(groove,105);
   // 二つの音源に同じ距離感を与える。GROOVEは短く、声は語句の輪郭を優先。
   shortRoom(voice,60/(voice.bpm||125),.035);
   shortRoom(groove,60/(voice.bpm||125),.035);
@@ -694,7 +643,7 @@ function normalize(voice,groove){
   }
   const vr=info(voice);
   // v0.3程度の存在感。v0.5のRMS比0.5前後を目指さず0.20前後を中心にする。
-  const gg=g.rms>.000001?Math.min(2.2,vr.rms*.17/g.rms,.30/Math.max(.0001,g.peak)):0;
+  const gg=g.rms>.000001?Math.min(3.6,vr.rms*.275/g.rms,.38/Math.max(.0001,g.peak)):0;
   for(let i=0;i<groove.left.length;i++){
     groove.left[i]*=gg;groove.right[i]*=gg;
   }
@@ -729,12 +678,14 @@ export function hatch(input,seed,forcedRecipe=null){
   const frames=Math.round(cell*4*RATE);
   const basePitch=estimateVoicePitch(input,analysis);
   const voice=buildVoice(input,analysis,dna,mulberry32(seed^0xB01234),frames,cell,basePitch);
-  const groove=buildGroove(input,analysis,dna,mulberry32(seed^0x5A5501),frames,cell,voice.events,basePitch);
+  const groove=buildGroove(input,analysis,dna,mulberry32(seed^0x5A5501),frames,cell,voice,basePitch);
   voice.bpm=dna.bpm;
   normalize(voice,groove);
   return {voice,groove,sampleRate:RATE,duration:frames/RATE,dna:{...dna,seconds:frames/RATE,cell},
     analysis:{phraseCount:analysis.phrases.length,fragmentCount:analysis.fragments.length,
-      pitchHz:basePitch,grooveHits:groove.events.length,cutUpHits:voice.cutUpHits??0}};
+      pitchHz:basePitch,grooveHits:groove.events.length,cutUpHits:voice.cutUpHits??0,
+      stepFX:voice.effectActions?.length??0,panMode:voice.panMode,echoMode:voice.echoMode,
+      grooveMode:groove.plan?.mode}};
 }
 export function mixLayers(song,enabled=true){
   const n=song.voice.left.length,left=new Float32Array(n),right=new Float32Array(n);
