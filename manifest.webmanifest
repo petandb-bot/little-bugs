@@ -1,7 +1,7 @@
 {
-  "name": "LITTLE BUGS — Voice Phrase Engine",
+  "name": "LITTLE BUGS — Contrast Sequencer",
   "short_name": "Little Bugs",
-  "description": "An 8-bit voice toy for experimental voice phrases and looping mutations.",
+  "description": "An 8-bit voice toy for strange rhythmic voice mutations.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

@@ -61,10 +61,30 @@ for(const [id,s] of seeds){
   console.log(`PASS ${id.padEnd(7)} ${result.duration.toFixed(1)}s voiceRMS=${voiceVolume.toFixed(3)} groove/voice=${(grooveVolume/voiceVolume).toFixed(2)}`);
 }
 assert.equal(hashes.size,ids.length,'Five recipes produce distinct audio');
+// 新機能: 強制レシピと異なるseedで音声が本当に大きく変わるかを確認。
+// 反復エンジンの「生成したが全部同じ」という退行を避ける。
+for(const id of ids){
+  const a=hatch(input,31337,id),b=hatch(input,31338,id),c=hatch(input,31339,id);
+  assert.equal(a.dna.id,id);assert.equal(b.dna.id,id);
+  assert.equal(new Set([hash(a.voice.left),hash(b.voice.left),hash(c.voice.left)]).size,3,
+    `Three ${id} variations must differ`);
+}
+// GROOVEは主役の声を破壊せず、周波数の低い不要なエネルギーは抑える。
+const low=hatch(input,84834,'PHRASE');
+function spectralProjection(arr,freq){
+ let re=0,im=0;
+ for(let i=0;i<Math.min(44100,arr.length);i+=5){
+   const angle=2*Math.PI*freq*i/44100;re+=arr[i]*Math.cos(angle);im+=arr[i]*Math.sin(angle);
+ }
+ return Math.hypot(re,im);
+}
+assert(spectralProjection(low.voice.left,10)<spectralProjection(low.voice.left,154)*.35,
+  'Very low frequency attenuated');
+
 const empty=hatch({data:new Float32Array(sr),sampleRate:sr,duration:1},6);
 assert(empty.voice.left.every(v=>v===0)&&empty.groove.left.every(v=>v===0));
 const short=hatch({data:d.slice(Math.round(sr*.24),Math.round(sr*.56)),sampleRate:sr,duration:.32},19);
 assert(short.voice.left.every(Number.isFinite));
 const mono=monoFromAudioBuffer({numberOfChannels:1,length:sr,sampleRate:sr,getChannelData:()=>d.slice(0,sr)});
 assert(Number.isFinite(mono.rms));
-console.log('All v0.6 audio-engine tests passed.');
+console.log('All v0.7 audio-engine tests passed.');

@@ -2,7 +2,7 @@ import {hatch, wavBlob, monoFromAudioBuffer, RATE, mixLayers} from './audio-engi
 import {BugVisual} from './visual.js';
 
 /**
- * LITTLE BUGS v0.6 — recording, live GROOVE switch and export
+ * LITTLE BUGS v0.7 — recording, live GROOVE switch and export
  *
  * データは端末上のメモリーにのみ保持します。
  * iOS Safari の MediaRecorder は MP4/AAC を使う場合があるため、
@@ -28,6 +28,23 @@ let playingSource = null, grooveSource = null, grooveGain = null, playingStart =
 let grooveEnabled = true;
 visual.setGroove(grooveEnabled);
 let counter = 0;
+// HATCHを何度押しても同じ作曲方式に偏らないよう、5レシピのシャッフル袋を使用する。
+// 各袋を引き切るまで同じレシピは登場せず、袋の境目でも連続重複を避ける。
+const recipeIds=['PHRASE','MANTRA','RAP','CHOIR','BROKEN'];
+let recipeBag=[],lastRecipe=null;
+function nextRecipe(){
+  if(recipeBag.length===0){
+    recipeBag=[...recipeIds];
+    for(let i=recipeBag.length-1;i>0;i--){
+      const j=Math.floor(Math.random()*(i+1));
+      [recipeBag[i],recipeBag[j]]=[recipeBag[j],recipeBag[i]];
+    }
+    if(recipeBag[0]===lastRecipe){
+      [recipeBag[0],recipeBag[1]]=[recipeBag[1],recipeBag[0]];
+    }
+  }
+  lastRecipe=recipeBag.shift();return lastRecipe;
+}
 let renderInProgress = false;
 const meterBars = Array.from({length:26},()=>{
   const el = document.createElement('span'); el.className='meter-bar'; ui.meter.appendChild(el); return el;
@@ -196,12 +213,12 @@ async function doHatch() {
   // 大きな同期処理の前に画面を少なくとも1フレーム描画する。
   await new Promise(resolve=>requestAnimationFrame(()=>setTimeout(resolve,0)));
   try {
-    const next=hatch(original,newSeed());
+    const next=hatch(original,newSeed(),nextRecipe());
     rendered=next;
     counter++;
     ui.counter.textContent=`NO. ${String(counter).padStart(4,'0')}`;
     ui.stage.textContent=`MUTATION NO. ${String(counter).padStart(4,'0')}`;
-    ui.dna.textContent=`PHRASE LOOP / ${next.dna.bpm} BPM`;
+    ui.dna.textContent=`VOICE MUTATION / ${next.dna.bpm} BPM`;
     ui.time.textContent=clock(next.duration);
     ui.elapsed.textContent=`${next.duration.toFixed(1)} SEC LOOP`;
     visual.setDna(next.dna);

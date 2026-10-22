@@ -1,5 +1,5 @@
 /**
- * LITTLE BUGS v0.6 — VOICE PHRASE ENGINE
+ * LITTLE BUGS v0.7 — CONTRAST SEQUENCER
  *
  * 設計原則：短い声をドラム用の極小断片に分解するのではなく、
  * 先に息継ぎ・無音・発音のまとまりからフレーズを抽出する。
@@ -109,17 +109,17 @@ export function analyzeVoice(input){
 }
 
 const RECIPES=[
-  {id:'PHRASE',tag:'PHRASE LOOP',weight:30},
-  {id:'MANTRA',tag:'MANTRA',weight:25},
-  {id:'RAP',tag:'LOOSE RAP',weight:20},
-  {id:'CHOIR',tag:'GHOST CHOIR',weight:15},
-  {id:'BROKEN',tag:'BROKEN VOICE',weight:10},
+  {id:'PHRASE',tag:'SHIFTED SPEECH',weight:20},
+  {id:'MANTRA',tag:'CHANT MACHINE',weight:20},
+  {id:'RAP',tag:'TALK RHYTHM',weight:20},
+  {id:'CHOIR',tag:'VOWEL CHOIR',weight:20},
+  {id:'BROKEN',tag:'RIPPED TAPE',weight:20},
 ];
 export function makeDna(seed){
   const rng=mulberry32(seed>>>0);
   let value=rng()*100;let recipe=RECIPES[0];
   for(const candidate of RECIPES){value-=candidate.weight;if(value<0){recipe=candidate;break;}}
-  const bpm=Math.round(random(rng,92,133));
+  const bpm=Math.round(random(rng,98,154));
   return {...recipe,seed:seed>>>0,sprite:(rng()*0xFFFFFFFF)>>>0,bpm,
     bugEnergy:random(rng,.75,1.34)};
 }
@@ -175,83 +175,161 @@ function paste(out,input,e){
   }
 }
 
-/** 4章の物語構造。主題 / 変奏 / 逸脱 / 回帰。 */
+/**
+ * 変異音の作曲エンジン。
+ * 大切なのは「5つの音色違い」ではなく「5つの違う時間構造」にすること。
+ * PHRASE: セリフ編集、MANTRA: 拍に結びついた連呼、RAP: 休符と先取り、
+ * CHOIR: ハーモニーの重層、BROKEN: v0.2型の破片的な循環。
+ * 声が聴き取れる主題を適量残すが、毎回 A-A'-B-A を強制しない。
+ */
 function buildVoice(input,analysis,dna,rng,frames,cell){
-  const out=layers(frames),primary=analysis.phrases[0];
-  if(!primary)return out;
-  const rest=analysis.phrases.filter(p=>p!==primary);
-  const secondary=rest.length?pick(rng,rest):primary;
-  const full=(source=primary,limit=cell*.90)=>({start:source.start,len:Math.min(source.len,limit)});
-  const play=(section,source,options={})=>paste(out,input,{
-    time:section*cell+(options.offset??.10),src:source,duration:options.duration??source.len,
-    gain:options.gain??.65,pan:options.pan??0,style:options.style??'clean',
-    pitch:options.pitch??0,filter:options.filter??13000,ring:options.ring??0,
+  const out=layers(frames);
+  const phrase=analysis.phrases;
+  if(!phrase.length)return out;
+  const length=frames/RATE;
+  const beat=60/dna.bpm;
+  const primary=phrase[0];
+  const secondary=phrase.length>1?pick(rng,phrase.slice(1)):primary;
+  const fragments=analysis.fragments.length?analysis.fragments:[primary];
+  const variation=Math.floor(rng()*4);
+  const main={start:primary.start,len:Math.min(primary.len,cell*.88)};
+  const other={start:secondary.start,len:Math.min(secondary.len,cell*.86)};
+  // 元の発話を残すイベントと、変調されたイベントは同じpaste関数を用いる。
+  const voice=(t,src,op={})=>paste(out,input,{
+    time:t,src,duration:op.duration??src.len,gain:op.gain??.65,
+    pan:op.pan??0,style:op.style??'clean',pitch:op.pitch??0,
+    filter:op.filter??11000,ring:op.ring??0,
   });
-  // 全レシピの入口には一つ聞き取れる主題を置く。BROKENも例外にしない。
-  const main=full();
-  play(0,main,{offset:.07,gain:.83});
+  const m=(len=.4)=>{
+    const f=pick(rng,fragments);
+    return {start:f.start,len:Math.min(f.len,len)};
+  };
+  const tail=(src=primary,len=.19)=>({
+    start:src.start+Math.max(0,src.len-len),len:Math.min(len,src.len)
+  });
+  // 間隔のある短い音節の連打。長いフレーズを刻む際のアクセントとしてのみ使用。
+  const chatter=(t,src,n=3,gap=beat*.25)=>{
+    const tiny={start:src.start,len:Math.min(src.len,gap*.84,.22)};
+    for(let i=0;i<n;i++)voice(t+i*gap,tiny,{
+      duration:tiny.len,gain:.28+(.13*(i===0)),
+      pan:i%2?.25:-.25,style:i===n-1?'reverse':'clean'
+    });
+  };
+  const phraseAt=(t,src=main,op={})=>voice(t,src,{gain:.8,...op});
+  // フレーズ終端を伸びる残響ではなく、リズムを持つコール&レスポンスに変える。
   if(dna.id==='PHRASE'){
-    // 声のほぼ全体をA→A'→B→Aと展開する。語尾だけの反復を装飾に使う。
-    play(1,main,{offset:.10,gain:.68,style:'pitch',pitch:pick(rng,[2,3,4])});
-    play(2,full(secondary),{offset:.12,gain:.71,style:pick(rng,['pitch','clean']),pitch:pick(rng,[0,3,5])});
-    const tail={start:main.start+main.len*.62,len:main.len*.38};
-    if(tail.len>.12)play(2,tail,{offset:cell*.68,duration:Math.min(tail.len,cell*.22),gain:.30,pan:.30});
-    play(3,main,{offset:.07,gain:.86});
-    if(main.len>.4)play(3,{start:main.start+main.len*.72,len:main.len*.28},{offset:cell*.74,gain:.24,pan:-.3});
+    // 各試行で配置を切り替え、主題が冒頭から2度続くマンネリを避ける。
+    const starts=[.09,cell*.13,cell*.07,cell*.22];
+    phraseAt(starts[variation],variation%2?other:main,{gain:.84});
+    if(variation===0){
+      voice(cell*.78,m(.30),{gain:.41});
+      phraseAt(cell+.06,other,{gain:.70,style:'pitch',pitch:5});
+      chatter(2*cell+.13,tail(main,.22),4,beat*.30);
+      phraseAt(2*cell+beat*1.7,main,{gain:.72,style:'pitch',pitch:3});
+      phraseAt(3*cell+beat*.25,other,{gain:.82});
+    }else if(variation===1){
+      phraseAt(cell+.12,main,{gain:.72,style:'pitch',pitch:4});
+      phraseAt(cell*1.7,other,{gain:.52});
+      phraseAt(2*cell+.03,other,{gain:.75,style:'reverse'});
+      phraseAt(2*cell+beat*2,main,{gain:.8});
+      chatter(3*cell+beat,tail(other,.16),3,beat*.33);
+      phraseAt(3*cell+beat*2.2,main,{gain:.69,style:'pitch',pitch:7});
+    }else if(variation===2){
+      phraseAt(cell+.09,other,{gain:.82});
+      chatter(cell+beat*2.15,tail(primary,.18),3,beat*.33);
+      phraseAt(2*cell+beat*.1,main,{gain:.69,style:'pitch',pitch:7});
+      phraseAt(2*cell+beat*2.05,other,{gain:.59});
+      phraseAt(3*cell+beat*.12,main,{gain:.83});
+    }else{
+      voice(beat*2.6,m(.33),{gain:.42,style:'reverse'});
+      phraseAt(cell+beat*.5,main,{gain:.77,style:'pitch',pitch:3});
+      phraseAt(2*cell+beat*.14,other,{gain:.82});
+      phraseAt(2*cell+beat*2.4,main,{gain:.50,style:'pitch',pitch:5});
+      chatter(3*cell+beat*.35,tail(primary,.18),4,beat*.42);
+      phraseAt(3*cell+beat*2,other,{gain:.69});
+    }
   }else if(dna.id==='MANTRA'){
-    // 声の抑揚ごと短い詠唱を反復。音節を機械的に16分割しない。
-    const mantra=full(primary,Math.min(cell*.54,1.65));
-    for(let section=0;section<4;section++){
-      if(section!==0)play(section,mantra,{offset:.07,gain:section===3?.79:.67,
-        style:section===2?'pitch':'clean',pitch:section===2?3:0});
-      const secondAt=Math.min(cell*.56,mantra.len+random(rng,.17,.35));
-      if(secondAt+mantra.len<cell+.14){
-        play(section,mantra,{offset:secondAt,gain:.49,style:section%2?'pitch':'clean',pitch:section%2?2:0,pan:section%2?.18:-.18});
+    // 拍単位の周期構造：反復回数、合間、ピッチ曲線をseedで大きく変える。
+    const unit=pick(rng,[beat*1.5,beat*2,beat*3]);
+    const lengthLimit=Math.min(primary.len,unit*.88,1.50);
+    const part={start:primary.start,len:lengthLimit};
+    const transpose=[[0,3,0,7],[0,0,5,3],[3,7,3,0],[0,5,7,5]][variation];
+    for(let bar=0;bar<4;bar++){
+      const t=bar*cell+beat*.13;
+      const count=bar===2?Math.max(2,Math.floor(cell/unit)):Math.max(1,Math.floor((cell-beat*.25)/unit));
+      for(let j=0;j<count;j++){
+        if(bar===3&&j===count-1&&variation%2===0)continue;
+        const pitch=transpose[(bar+j)%4];
+        phraseAt(t+j*unit,part,{gain:j===0?.78:.60,pitch,style:pitch?'pitch':'clean'});
+      }
+      if(bar===1||bar===3){
+        const t2=bar*cell+cell*.73;
+        chatter(t2,tail(part,.14),variation%2?4:2,beat*.27);
       }
     }
-    if(main.len>.35)play(2,{start:main.start+main.len*.4,len:main.len*.4},{offset:cell*.77,gain:.22,style:'reverse'});
+    if(variation===3)phraseAt(cell*2+beat*.3,other,{gain:.53,style:'reverse'});
   }else if(dna.id==='RAP'){
-    // 全体は語句のまとまりのまま。A'の先取り・休符・末尾の重複でラップらしいフロウ。
-    play(1,full(secondary,cell*.60),{offset:.04,gain:.75,duration:Math.min(secondary.len,cell*.55)});
-    const phrase=full(primary,cell*.54);
-    play(1,phrase,{offset:cell*.57,gain:.65,duration:Math.min(phrase.len,cell*.36)});
-    const call=full(primary,cell*.42),response=full(secondary,cell*.44);
-    play(2,call,{offset:.02,gain:.72,duration:Math.min(call.len,cell*.38)});
-    play(2,response,{offset:cell*.49,gain:.69,duration:Math.min(response.len,cell*.37),style:'pitch',pitch:2});
-    const end={start:main.start+main.len*.65,len:main.len*.35};
-    play(3,main,{offset:.06,gain:.80});
-    if(end.len>.13)for(let i=0;i<2;i++){
-      play(3,end,{offset:cell*.69+i*cell*.13,duration:Math.min(end.len,cell*.12),gain:.25-i*.06,pan:i?-.2:.2});
-    }
+    // ラップ風フロウは極端な粒子化ではなく、先取り／タメ／休符／語尾の多重化で作る。
+    const pulse=beat*.5;
+    const patterns=[
+      [[0,0],[0,5.5],[1,.8],[1,6.25],[2,.12],[2,5.2],[3,.1],[3,6.0]],
+      [[0,.6],[0,6.25],[1,1.15],[2,0],[2,5.7],[3,1.0],[3,6.5]],
+      [[0,0],[0,4],[1,.05],[1,6.25],[2,.65],[2,5.15],[3,0],[3,6.2]],
+      [[0,.3],[0,5.7],[1,0],[1,3.8],[2,.3],[2,6],[3,.3],[3,5.8]]
+    ][variation];
+    const syllables=[main,other,m(.64),tail(primary,.42),m(.40)];
+    patterns.forEach(([bar,pulsePos],i)=>{
+      const src=i===0?main:i===patterns.length-1?other:syllables[(i+variation)%syllables.length];
+      const t=bar*cell+pulsePos*pulse;
+      voice(t,src,{gain:i%3===0?.77:.57,
+        duration:Math.min(src.len,pulse*(i%3===0?3.6:2.6)),
+        style:i===patterns.length-2?'pitch':'clean',pitch:i===patterns.length-2?4:0});
+    });
+    for(let i=0;i<2;i++)chatter((i+1)*cell+cell*.68,tail(primary,.16),variation%2?4:3,beat*.24);
+    // 最終小節末尾にだけ発話の痕跡を戻す。冒頭と末尾を同じにしない。
   }else if(dna.id==='CHOIR'){
-    // 元のフレーズの背後に薄い歌声を追加。厚いコード伴奏にはしない。
-    for(let section=0;section<4;section++){
-      if(section!==0)play(section,full(section===2?secondary:primary),{offset:.08,gain:.66});
-      const line=full(section===2?secondary:primary,cell*.83);
-      play(section,line,{offset:.14,gain:.32,pan:-.4,style:'pitch',pitch:section===2?5:3,filter:8200});
-      if(section===1||section===3)play(section,line,{offset:.18,gain:.19,pan:.4,style:'pitch',pitch:-2,filter:6800});
+    // 音域を下げず、原音・上3度・上5度など高域側で声を交錯させる。
+    const harmonies=[[0,4,7],[0,3,7],[0,5,9],[0,7,12]][variation];
+    for(let b=0;b<4;b++){
+      const chosen=b===2?other:main;
+      const t=b*cell+beat*(b%2?.32:.12);
+      phraseAt(t,chosen,{gain:.52});
+      voice(t+beat*.19,chosen,{gain:.35,pan:-.46,pitch:harmonies[1],style:'pitch',filter:8900});
+      if((b+variation)%3!==0){
+        voice(t+beat*.42,chosen,{gain:.27,pan:.47,pitch:harmonies[2],style:'pitch',filter:10600});
+      }
+      if(b===1||b===3)voice(t+beat*2.2,tail(chosen,.28),{gain:.35,style:'pitch',pitch:12});
     }
   }else if(dna.id==='BROKEN'){
-    // v0.2のような粒子・逆再生は2〜3章のみ。冒頭と終章は原音を戻す。
-    const fragments=analysis.fragments.length?analysis.fragments:[primary];
-    play(1,full(secondary,cell*.46),{offset:.11,gain:.56,style:'pitch',pitch:4});
-    for(let section=1;section<=2;section++){
-      const count=section===1?4:7;
-      for(let i=0;i<count;i++){
-        const sample=pick(rng,fragments),s={start:sample.start,len:Math.min(sample.len,random(rng,.14,.38))};
-        play(section,s,{offset:cell*(i+.25)/(count+.5),duration:Math.min(s.len,.33),
-          gain:random(rng,.22,.39),pan:random(rng,-.5,.5),style:pick(rng,['reverse','pitch','clean']),
-          pitch:pick(rng,[0,2,4,7]),ring:rng()<.18?random(rng,70,140):0});
-      }
+    // v0.2に近い素材破壊。音節の密度・長さ・逆再生頻度が他とは段違い。
+    const pulse=beat*.25;
+    const count=variation%2?25:33;
+    const motif=Array.from({length:8},()=>({
+      fragment:m(random(rng,.065,.36)),reverse:rng()<.42,
+      pitch:pick(rng,[0,3,5,7,9]),pan:random(rng,-.58,.58),
+    }));
+    for(let i=0;i<count;i++){
+      if(i%8===6&&rng()<.72)continue;
+      const bar=i/count*4,cellIndex=Math.floor(bar);
+      const t=clamp((bar*cell)+random(rng,-pulse*.27,pulse*.27),0,length-.15);
+      const note=motif[i%8];
+      voice(t,note.fragment,{gain:random(rng,.28,.57),pan:note.pan,
+        duration:Math.min(note.fragment.len,random(rng,.065,.22)),
+        style:(i+variation)%5===0?'pitch':note.reverse?'reverse':'clean',
+        pitch:note.pitch,ring:rng()<.20?random(rng,76,230):0,
+        filter:random(rng,2100,11000)});
     }
-    play(3,main,{offset:.09,gain:.85});
+    const anchorAt=variation%2?cell*.65:cell*.12;
+    phraseAt(anchorAt,main,{gain:.72});
+    phraseAt(cell*2.25,variation>1?other:main,{gain:.64,style:'pitch',pitch:3});
   }
-  // 控えめな語尾のエコー。拍で毎回鳴るドラム的なディレイにはしない。
-  if(dna.id==='PHRASE'||dna.id==='MANTRA'||dna.id==='CHOIR'){
-    const tap=Math.round(random(rng,.20,.36)*RATE),decay=dna.id==='CHOIR'?.095:.07;
+  // 声そのものから短い残響を作る。レシピごとに量を変え、元の動きをぼかし過ぎない。
+  if(dna.id==='CHOIR'||dna.id==='PHRASE'||dna.id==='BROKEN'){
+    const delay=Math.round(random(rng,.18,.32)*RATE);
+    const decay=dna.id==='CHOIR'?.14:dna.id==='BROKEN'?.18:.09;
     for(const channel of [out.left,out.right]){
       const dry=channel.slice();
-      for(let i=tap;i<frames;i++)channel[i]+=dry[i-tap]*decay;
+      for(let i=delay;i<frames;i++)channel[i]+=dry[i-delay]*decay;
     }
   }
   return out;
@@ -266,7 +344,7 @@ function smallTone(out,at,type,rng,gain,pitch=0){
     const t=i/RATE,noise=rng()*2-1;
     let v=0;
     if(type==='plop'){
-      phase+=TAU*(108+pitch*13+100*Math.exp(-t*28))/RATE;
+      phase+=TAU*(195+pitch*19+85*Math.exp(-t*30))/RATE;
       v=(Math.sin(phase)+.17*Math.sin(phase*2))*Math.exp(-t*26);
     }else if(type==='click'){
       lp+=.12*(noise-lp);v=(noise-lp)*Math.exp(-t*92);
@@ -309,7 +387,24 @@ function edgeFade(layer){
     arr[i]*=w;arr[arr.length-1-i]*=w;
   }
 }
+/**
+ * 低周波のモゴモゴを減らす。音声の倍音を保持しながら、
+ * 出力バッファに残った直流／極低域を一段のDCブロック＋HPで削る。
+ * 声そのものをローカットしすぎないように、ボイスは約105Hz、
+ * 補助電子音は約155Hzを基準にする。
+ */
+function cutRumble(layer,frequency){
+  const a=1-Math.exp(-TAU*frequency/RATE);
+  for(const arr of [layer.left,layer.right]){
+    let low=0;
+    for(let i=0;i<arr.length;i++){
+      const x=arr[i];low+=a*(x-low);arr[i]=x-low;
+    }
+  }
+}
 function normalize(voice,groove){
+  cutRumble(voice,105);cutRumble(groove,155);
+
   const v=info(voice),g=info(groove);
   const vg=v.peak>.0002?Math.min(4.3,.88/v.peak,.155/Math.max(v.rms,.0001)):1;
   for(let i=0;i<voice.left.length;i++){
@@ -337,13 +432,19 @@ function normalize(voice,groove){
     }
   }
 }
-export function hatch(input,seed){
+export function hatch(input,seed,forcedRecipe=null){
   if(!input?.data?.length||!(input.sampleRate>0))throw Error('No recorded audio.');
   const dna=makeDna(seed),analysis=analyzeVoice(input);
+  if(forcedRecipe && RECIPES.some(r=>r.id===forcedRecipe)){
+    const selected=RECIPES.find(r=>r.id===forcedRecipe);
+    dna.id=selected.id;dna.tag=selected.tag;
+  }
   const primary=analysis.phrases[0];
   const phraseLength=primary?.len??.8;
   const rng=mulberry32(seed^0xC12F25);
-  const cell=clamp(phraseLength*random(rng,1.14,1.48)+.32,1.72,3.7);
+  // cellは拍周期の整数倍。BPM表示と実際の配置を一致させる。
+  const beat=60/dna.bpm;
+  const cell=beat*(phraseLength>1.95?6:4);
   const frames=Math.round(cell*4*RATE);
   const voice=buildVoice(input,analysis,dna,mulberry32(seed^0xB01234),frames,cell);
   const groove=buildGroove(input,analysis,dna,mulberry32(seed^0x5A5501),frames,cell);
