@@ -1,7 +1,7 @@
 import {mulberry32} from './audio-engine.js';
 
 /**
- * LITTLE BUGS v0.7 — MINIMAL PIXEL PETS
+ * LITTLE BUGS v0.8 — MINIMAL PIXEL PETS
  * 表情・装飾を描き込まず、11×11 のシルエットと1〜3点の目で個体差を作る。
  * アニメーションは少数コマの切替。音楽の拍と生き物の運動だけを同期させる。
  */

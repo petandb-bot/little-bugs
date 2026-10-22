@@ -2,7 +2,7 @@ import {hatch, wavBlob, monoFromAudioBuffer, RATE, mixLayers} from './audio-engi
 import {BugVisual} from './visual.js';
 
 /**
- * LITTLE BUGS v0.7 — recording, live GROOVE switch and export
+ * LITTLE BUGS v0.8 — recording, live GROOVE switch and export
  *
  * データは端末上のメモリーにのみ保持します。
  * iOS Safari の MediaRecorder は MP4/AAC を使う場合があるため、
@@ -113,7 +113,7 @@ function toggleGroove(){
     grooveGain.gain.cancelScheduledValues(now);
     grooveGain.gain.setTargetAtTime(grooveEnabled?1:0,now,.015);
   }
-  setStatus(grooveEnabled?'GROOVE ON — TINY SOUND ACCENTS.':'GROOVE OFF — VOICE ONLY.');
+  setStatus(grooveEnabled?'GROOVE ON — VOICE-SYNCED ACCENTS.':'GROOVE OFF — VOICE ONLY.');
   syncUI();
 }
 function releaseMic() {

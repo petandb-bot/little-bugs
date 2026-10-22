@@ -1,9 +1,9 @@
 {
   "name": "little-bugs-voice-pets",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "type": "module",
-  "description": "Voice-driven contrasting rhythmic mutation engine with sparse GROOVE and pixel creatures.",
+  "description": "Voice-led looping toy with pitch-linked micro-groove and pixel creatures.",
   "scripts": {
     "test": "node ./tests/engine-smoke.mjs"
   }

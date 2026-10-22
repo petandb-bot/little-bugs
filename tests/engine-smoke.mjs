@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {hatch,makeDna,mixLayers,wavBlob,RATE,analyzeVoice,monoFromAudioBuffer} from '../audio-engine.js';
+import {hatch,makeDna,mixLayers,wavBlob,RATE,analyzeVoice,monoFromAudioBuffer,estimateVoicePitch,planGrooveEvents} from '../audio-engine.js';
 
 // 声のような母音と子音の立ち上がりを5つの区間に作る。途中に無音を入れてフレーズ抽出も検証する。
 const sr=48000;
@@ -22,6 +22,16 @@ const analyzed=analyzeVoice(input);
 assert(analyzed.active,'Non-silent voice detected');
 assert(analyzed.phrases.length>=3,'Pauses separate natural phrases');
 assert(analyzed.phrases.every(p=>p.len>=.14),'No tiny fragments used as primary phrases');
+// 単音に近い有声音ならGROOVEの基準音高が妥当な範囲に収まること。
+const fundamental=estimateVoicePitch(input,analyzed);
+assert(fundamental===null||(fundamental>=105&&fundamental<=380),'Estimated pitch in speech range');
+// 発音に従属した伴奏計画の検証（別テンポの自由ドラムにはしない）。
+const onsets=[{time:.2,end:.67,duration:.47,gain:.8},{time:1.35,end:1.8,duration:.45,gain:.8},{time:2.68,end:3.11,duration:.43,gain:.7}];
+const groovePlan=planGrooveEvents(onsets,{bpm:120},123,4.2,176);
+assert(groovePlan.length>=2,'Audible number of accents');
+assert(groovePlan.every(e=>Number.isFinite(e.frequency)&&e.frequency>=220),'Tone frequencies safe');
+assert(groovePlan.every(e=>Math.abs(e.time-e.voiceTime)<.91),'All groove notes follow a voice event');
+
 const ids=['PHRASE','MANTRA','RAP','CHOIR','BROKEN'];
 const seeds=new Map();
 for(let s=0;s<2000&&seeds.size<ids.length;s++){
@@ -40,6 +50,10 @@ for(const [id,s] of seeds){
   assert.equal(result.dna.id,id);
   assert(result.duration>=6.8&&result.duration<=14.81,'Phrase-sized loops');
   assert.equal(result.analysis.phraseCount,analyzed.phrases.length);
+  assert(result.analysis.grooveHits>=1 && result.analysis.grooveHits<=12,'Groove stays sparse');
+  assert(result.groove.events.every(x=>x.time>=0 && x.time<result.duration),'Groove events within loop');
+  assert(result.groove.events.every(x=>Math.abs(x.time-x.voiceTime)<1.2),'Groove tied to a voice attack or response');
+
   assert.equal(hash(result.voice.left),hash(same.voice.left),'Deterministic voice per seed');
   assert.equal(hash(result.groove.left),hash(same.groove.left),'Deterministic groove per seed');
   hashes.add(hash(result.voice.left));
@@ -87,4 +101,4 @@ const short=hatch({data:d.slice(Math.round(sr*.24),Math.round(sr*.56)),sampleRat
 assert(short.voice.left.every(Number.isFinite));
 const mono=monoFromAudioBuffer({numberOfChannels:1,length:sr,sampleRate:sr,getChannelData:()=>d.slice(0,sr)});
 assert(Number.isFinite(mono.rms));
-console.log('All v0.7 audio-engine tests passed.');
+console.log('All v0.8 audio-engine tests passed.');
