@@ -1,0 +1,10 @@
+{
+  "name": "little-bugs-first-hatch",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A tiny musical creature born from your voice.",
+  "scripts": {
+    "test": "node ./tests/engine-smoke.mjs"
+  }
+}
