@@ -1,9 +1,9 @@
 {
-  "name": "little-bugs-first-hatch",
-  "version": "0.1.0",
+  "name": "little-bugs-voice-mutator",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "A tiny musical creature born from your voice.",
+  "description": "Voice-only experimental loops and pocket LCD creatures.",
   "scripts": {
     "test": "node ./tests/engine-smoke.mjs"
   }

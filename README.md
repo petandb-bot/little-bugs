@@ -1,80 +1,31 @@
-# LITTLE BUGS — First Hatch v0.1
+# LITTLE BUGS — v0.2
 
-**Record a voice. Hatch a little musical creature.**
+A pocket-sized experimental voice toy. Record any sound and hatch it into a strange, repeating loop. Everything runs locally in your browser.
 
-p5.js ＋ Web Audio API ＋ GitHub Pages で動作する小さな音響玩具です。
+## Play
 
-## 今回動く機能
+1. Tap **REC** and allow microphone access.
+2. Tap **STOP** when finished (12 seconds maximum).
+3. Tap **HATCH** to generate a new sound creature.
+4. Tap **PLAY** to start or stop the repeating loop.
+5. Tap **SAVE** to export a stereo WAV file.
 
-- マイクで最大12秒録音／停止（iPhone Safari、デスクトップブラウザーを想定）
-- 録音をスライスし、4小節の音楽へ自動再構成
-- 音響DNAは4系統：CHIP HOP / BUBBLE POP / TINY CHOIR / ROBO PARADE
-- 声のピッチと再生速度変更、打楽器・玩具的シンセ音・ステレオエコー
-- 同じ録音に対して `HATCH` を繰り返して違う結果を生成
-- `PLAY / STOP`、16-bit stereo WAVファイルの保存
-- DNAと同期したドット生物の生成／アニメーション
-- PWA：iPhoneのホーム画面への追加、初回読み込み後のキャッシュ
-- 音声はすべてローカル処理。サーバーへアップロードしません。
+Tap **HATCH** again to create a different loop from the same recording.
 
-**v0.1で未実装：** 真のボコーダー、独立したタイムストレッチ（ピッチと速度を別々に制御する処理）、声そのものだけからの楽器音の高精度な抽出、音声／バグコレクションの永続保存。ROBOはリングモジュレーションに近い簡易音色加工です。
+## Publish with GitHub Pages
 
-## GitHub Pages に公開
+1. Create a GitHub repository.
+2. Upload the **contents** of this folder to the repository root. Keep `index.html` at the top level.
+3. Open **Settings → Pages**.
+4. Set **Source** to **Deploy from a branch**, **Branch** to `main`, and **Folder** to `/(root)`. Save.
+5. Open the website URL displayed in Pages settings.
 
-1. GitHubで新しい公開リポジトリを作成。名前は例 `little-bugs`。
-2. このZIPを展開し、中身の `index.html`, `app.js`, `audio-engine.js`, `visual.js`, `style.css`, `sw.js`, `manifest.webmanifest`, `assets/` をリポジトリの**ルート**へアップロード。
-3. GitHub → リポジトリの **Settings → Pages** で **Deploy from a branch** を選び、`main` / `/(root)` を指定して Save。
-4. 発行される `https://<username>.github.io/little-bugs/` をiPhoneの **Safari** で開く。
-5. マイクへのアクセスを許可。Safariの「共有 → ホーム画面に追加」から「Webアプリとして開く」をオンにするとアプリのように起動できます。
+On iPhone, open the site in Safari and choose **Share → Add to Home Screen**.
 
-※ `file://`でHTMLをダブルクリックする起動方法ではマイクやモジュールの読み込みが動作しません。HTTPS、またはPCの `localhost` で開いてください。
+## Notes
 
-## PCで動作確認
-
-```bash
-cd little-bugs-v0.1
-python3 -m http.server 8000
-```
-
-`http://localhost:8000/` へアクセスします。
-
-音響エンジンの自動テストは Node.js で `npm test` を実行します（依存パッケージ不要）。
-
-## 使い方
-
-1. **REC** → 声・鼻歌・拍手・環境音を録る（1〜12秒を推奨）
-2. **STOP** → 取り込みを完了
-3. **HATCH** → 声から4小節の演奏と小さな生き物が生成される
-4. **PLAY** → 生き物の音を試聴
-5. **HATCH** を再度押すと別の音になり、**SAVE** で現行の音をWAV保存
-
-iPhoneのSafariでは **SAVE** が共有シートを開く場合があります。「ファイルに保存」を選んでください。PCでは通常のダウンロードが始まります。
-
-## 主なファイル
-
-| ファイル | 役割 |
-| --- | --- |
-| `audio-engine.js` | 音声のスライス解析、4小節生成、合成音、WAV出力 |
-| `app.js` | マイク録音、エラーハンドリング、ボタン操作、再生と保存 |
-| `visual.js` | p5.jsの描画とドット生物の生成。CDN不通ならCanvasフォールバック |
-| `style.css` | レトロ玩具の画面デザイン |
-| `sw.js` | PWA用のオフラインキャッシュ |
-| `manifest.webmanifest` | ホーム画面起動用の設定 |
-
-外部CDNからp5.js 1.11.13を初回取得します。次回以降、正常にキャッシュされていればオフライン表示が可能ですが、オフライン動作は全環境で保証しません。必要ならライブラリをローカル同梱する方式に移行できます。
-
-## 次の開発段階
-
-- v0.1.1: iPhone実機結果に基づく録音・保存互換性調整。振幅・発声区切り認識の改善。
-- v0.2: 真のヴォコーダー、声由来のビート合成、音響DNA間の交配、生成音の対比を強く。
-- v0.3: 画面演出・「孵化」アニメーション・バグコレクション、Safari PWA最適化。
-
-## プライバシー・制限
-
-- 録音音声はメモリー内のみ。保存するのはユーザーが操作したWAVファイルのみで、録音音声や分析結果をサーバーへ送信しません。
-- ページ再読み込みで未保存の録音・生成結果は消えます。
-- マイク権限が必要です。録音中にほかのアプリへ切り替えたり、端末をロックすると中断されることがあります。
-- 標準の `MediaRecorder` で録音されたコーデックを端末の `decodeAudioData` が読める必要があります。古い端末・ブラウザーでは失敗する場合があります。
-- 4小節固定で、録音した音声が素材になります。歌詞や言葉の意味を認識するものではありません。
-
----
-Version: 0.1 · October 2026
+- Use HTTPS or localhost for microphone access.
+- No account, backend, or audio uploads are required.
+- The saved WAV contains two variations of one repeating cycle.
+- Offline use becomes available after the site and its dependencies have been loaded once.
+- A real microphone and mobile-browser test is recommended before sharing the app.

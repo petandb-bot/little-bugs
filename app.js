@@ -2,7 +2,7 @@ import {hatch, wavBlob, monoFromAudioBuffer, RATE} from './audio-engine.js';
 import {BugVisual} from './visual.js';
 
 /**
- * LITTLE BUGS v0.1 — UI and recording
+ * LITTLE BUGS v0.2 — UI and recording
  *
  * データは端末上のメモリーにのみ保持します。
  * iOS Safari の MediaRecorder は MP4/AAC を使う場合があるため、
@@ -42,11 +42,11 @@ function syncUI() {
   ui.recLabel.textContent=recording?'STOP':'REC';
   ui.recIcon.textContent=recording?'■':'●';
   ui.led.classList.toggle('rec',recording);
-  ui.hatch.disabled=!original || recording || renderInProgress;
-  ui.play.disabled=!rendered || recording || renderInProgress;
+  ui.hatch.disabled=!original || recording || renderInProgress || state==='requesting' || state==='loading';
+  ui.play.disabled=!rendered || recording || renderInProgress || state==='requesting' || state==='loading';
   ui.playLabel.textContent=state==='playing'?'STOP':'PLAY';
   ui.playIcon.textContent=state==='playing'?'■':'▶';
-  ui.save.disabled=!rendered || recording || renderInProgress;
+  ui.save.disabled=!rendered || recording || renderInProgress || state==='requesting' || state==='loading';
   ui.meterTitle.textContent=recording?'LIVE MIC':state==='playing'?'PLAYBACK':'MIC INPUT';
 }
 function showError(err, action='ACTION') {
@@ -74,7 +74,8 @@ function stopPlayback() {
   }
   if(state==='playing') {
     state=rendered?'hatched':'idle'; visual.setMode('hatched');
-    setStatus('BUG IS READY TO PLAY.');
+    ui.stage.textContent=`HELLO, BUG #${String(counter).padStart(3,'0')}!`;
+    setStatus('BUG IS READY TO LOOP.');
   }
   visual.setProgress(0);
   syncUI();
@@ -169,10 +170,10 @@ function newSeed() {
   return Math.floor(Math.random()*0xFFFFFFFF);
 }
 async function doHatch() {
-  if(!original || renderInProgress || state==='recording') return;
+  if(!original || renderInProgress || ['recording','requesting','loading'].includes(state)) return;
   stopPlayback();
   renderInProgress=true;state='hatching';
-  ui.stage.textContent='HATCHING…';setStatus('GIVING YOUR VOICE LITTLE LEGS…');syncUI();
+  ui.stage.textContent='HATCHING…';setStatus('CUTTING AND MUTATING YOUR SOUND…');syncUI();
   // 大きな同期処理の前に画面を少なくとも1フレーム描画する。
   await new Promise(resolve=>requestAnimationFrame(()=>setTimeout(resolve,0)));
   try {
@@ -181,11 +182,11 @@ async function doHatch() {
     counter++;
     ui.counter.textContent=`NO. ${String(counter).padStart(4,'0')}`;
     ui.stage.textContent=`HELLO, BUG #${String(counter).padStart(3,'0')}!`;
-    ui.dna.textContent=`${next.dna.name} / ${next.dna.bpm} BPM`;
+    ui.dna.textContent=`${next.dna.name} / ${next.dna.cycleSeconds.toFixed(1)} SEC`;
     ui.time.textContent=clock(next.duration);
-    ui.elapsed.textContent=`${next.duration.toFixed(1)} SEC SONG`;
+    ui.elapsed.textContent=`${next.duration.toFixed(1)} SEC LOOP`;
     visual.setDna(next.dna);
-    setStatus('NEW BUG BORN! TAP PLAY OR HATCH AGAIN.');
+    setStatus('NEW LOOP BORN. TAP PLAY OR HATCH AGAIN.');
     state='hatched';
   } catch(err) {state=rendered?'hatched':'recorded';showError(err,'HATCH');}
   renderInProgress=false;syncUI();
@@ -199,7 +200,7 @@ async function togglePlay() {
     const buffer=ctx.createBuffer(2,rendered.left.length,RATE);
     buffer.copyToChannel(rendered.left,0);buffer.copyToChannel(rendered.right,1);
     const source=ctx.createBufferSource();
-    source.buffer=buffer;source.connect(ctx.destination);
+    source.buffer=buffer;source.loop=true;source.connect(ctx.destination);
     playingSource=source;
     playingStart=ctx.currentTime;
     source.onended=()=>{
@@ -209,7 +210,7 @@ async function togglePlay() {
     };
     source.start(0);
     state='playing';visual.setMode('playing');
-    setStatus('BUG IS SINGING!');syncUI();
+    ui.stage.textContent='BUG IS LOOPING…';setStatus('LOOPING… TAP STOP TO END.');syncUI();
   }catch(err){showError(err,'PLAY');}
 }
 async function saveWav() {
@@ -249,12 +250,15 @@ function tick() {
     ui.time.textContent=clock(duration);
     ui.elapsed.textContent=`${Math.max(0,MAX_RECORD_S-duration).toFixed(1)} SEC LEFT`;
   } else if(state==='playing' && context && rendered) {
-    const elapsed=Math.max(0,context.currentTime-playingStart);
+    const elapsed=Math.max(0,(context.currentTime-playingStart)%rendered.duration);
     const progress=Math.min(1,elapsed/rendered.duration);
     visual.setProgress(progress);
     ui.time.textContent=clock(elapsed);
-    const period=60/rendered.dna.bpm;
-    meterLevel=0.22+0.7*Math.pow(Math.max(0,Math.cos(elapsed/period*Math.PI*2)),6);
+    // 入力から生成した波形の短時間音量でメーターを動かす。人工的な拍は使わない。
+    const start=Math.min(rendered.left.length-1,Math.floor(elapsed*RATE));
+    let energy=0,n=0;
+    for(let k=0;k<1024;k+=8){const idx=(start+k)%rendered.left.length;energy+=rendered.left[idx]**2+rendered.right[idx]**2;n+=2;}
+    meterLevel=Math.min(1,Math.sqrt(energy/Math.max(1,n))*3.2);
     visual.setLevel(meterLevel);
   } else visual.setLevel(0);
   meterBars.forEach((bar,i)=>{

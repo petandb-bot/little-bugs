@@ -2,36 +2,42 @@ import assert from 'node:assert/strict';
 import {makeDna,hatch,wavBlob} from '../audio-engine.js';
 import {createHash} from 'node:crypto';
 
-// 2秒間の模擬音声を作り、外部マイク・ブラウザーを使わず音響エンジンを検証する。
+// 模擬音声を使い、4種のレシピ・疑似乱数の再現性・WAV構造を検証。
 const sampleRate=44100;
-const input=new Float32Array(sampleRate*2);
-for(let i=0;i<input.length;i++) {
+const data=new Float32Array(sampleRate*2);
+for(let i=0;i<data.length;i++){
   const t=i/sampleRate;
-  input[i]=Math.sin(2*Math.PI*210*t)*Math.max(0,Math.sin(2*Math.PI*4*t))*.36;
+  const pulsation=Math.max(0,Math.sin(2*Math.PI*3.2*t));
+  data[i]=(.20*Math.sin(2*Math.PI*196*t)+.13*Math.sin(2*Math.PI*351*t))*pulsation;
 }
-const recording={data:input,sampleRate,duration:2};
-// 全4系統のDNAを少なくとも1回ずつ網羅するseedを動的に探す。
+const recording={data,sampleRate,duration:2};
+const types=['FLEA','MOTH','WORM','PUPA'];
 const seeds=new Map();
-for(let i=0;i<150&&!['CHIP','BOUNCE','CHOIR','ROBO'].every(id=>seeds.has(id));i++) {
+for(let i=0;i<150 && seeds.size<4;i++){
   const id=makeDna(i).id;
   if(!seeds.has(id))seeds.set(id,i);
 }
 assert.equal(seeds.size,4);
-for(const [type,seed] of seeds.entries()) {
-  const a=hatch(recording,seed), b=hatch(recording,seed);
+for(const [type,seed] of seeds){
+  const a=hatch(recording,seed),b=hatch(recording,seed);
   assert.equal(a.dna.id,type);
+  assert(a.duration>6&&a.duration<12);
   assert.equal(a.left.length,a.right.length);
-  assert(a.duration>5&&a.duration<12);
   let peak=0,energy=0;
   for(const s of a.left){assert(Number.isFinite(s));peak=Math.max(peak,Math.abs(s));energy+=s*s;}
-  assert(peak>.05&&peak<=1,'音が生成され、ピーク超過しないこと');
-  assert(energy/a.left.length>.0001,'無音になっていないこと');
+  assert(peak>.025&&peak<=1,'Generated audio must be audible and unclipped.');
+  assert(energy/a.left.length>.00001,'Generated audio must not be silent.');
   const sha=x=>createHash('sha256').update(new Uint8Array(x.buffer)).digest('hex');
-  assert.equal(sha(a.left),sha(b.left),'同じseedなら同じ音になること');
+  assert.equal(sha(a.left),sha(b.left),'Same recording and seed must generate identical audio.');
   const wav=new Uint8Array(await wavBlob(a).arrayBuffer());
   assert.equal(String.fromCharCode(...wav.slice(0,4)),'RIFF');
   assert.equal(String.fromCharCode(...wav.slice(8,12)),'WAVE');
-  assert(wav.byteLength>100000);
-  console.log(`PASS ${type}: ${a.duration.toFixed(2)}s / ${a.dna.bpm} BPM / ${wav.byteLength} bytes`);
+  assert.equal(wav.byteLength,44+a.left.length*4);
+  // 再生をループしたときに境界で大きな段差を生じさせない。
+  assert(Math.abs(a.left[0]-a.left.at(-1))<.0001);
+  console.log(`PASS ${type}: ${a.duration.toFixed(2)}s / ${wav.byteLength} bytes`);
 }
-console.log('All audio-engine tests passed.');
+// 録音が完全無音なら、音楽的な伴奏や追加ノイズを生成しない。
+const silent=hatch({data:new Float32Array(44100),sampleRate:44100,duration:1},19);
+assert(silent.left.every(x=>x===0) && silent.right.every(x=>x===0));
+console.log('All experimental-loop tests passed.');

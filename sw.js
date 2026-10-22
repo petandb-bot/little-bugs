@@ -1,5 +1,5 @@
 // GitHub Pages のサブディレクトリでも動作する相対パス指定。
-const CACHE_NAME = 'little-bugs-v0.1.0';
+const CACHE_NAME = 'little-bugs-v0.2.0';
 const CORE = ['./', './index.html', './style.css', './app.js', './audio-engine.js', './visual.js', './manifest.webmanifest', './assets/icon-192.png', './assets/icon-512.png', './assets/apple-touch-icon.png'];
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE)).then(() => self.skipWaiting()));

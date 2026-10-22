@@ -1,7 +1,7 @@
 {
-  "name": "LITTLE BUGS — Magic Voice Toy",
+  "name": "LITTLE BUGS — Experimental Voice Toy",
   "short_name": "Little Bugs",
-  "description": "Record a sound. Hatch a tiny musical creature.",
+  "description": "Record a sound. Hatch a strange little loop.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
