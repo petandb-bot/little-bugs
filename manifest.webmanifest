@@ -1,14 +1,14 @@
 {
-  "name": "LITTLE BUGS — Experimental Voice Toy",
+  "name": "LITTLE BUGS — 8-Bit Voice Pets",
   "short_name": "Little Bugs",
-  "description": "Record a sound. Hatch a strange little loop.",
+  "description": "Record a voice, hatch tiny musical loops, and play with pixel creatures.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#e7ddf3",
-  "theme_color": "#e7ddf3",
+  "background_color": "#d9d6dd",
+  "theme_color": "#d9d6dd",
   "icons": [
-    {"src": "./assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
-    {"src": "./assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+    {"src":"./assets/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
+    {"src":"./assets/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
   ]
 }

@@ -1,8 +1,8 @@
-import {hatch, wavBlob, monoFromAudioBuffer, RATE} from './audio-engine.js';
+import {hatch, wavBlob, monoFromAudioBuffer, RATE, mixLayers} from './audio-engine.js';
 import {BugVisual} from './visual.js';
 
 /**
- * LITTLE BUGS v0.2 — UI and recording
+ * LITTLE BUGS v0.3 — recording, live GROOVE switch and export
  *
  * データは端末上のメモリーにのみ保持します。
  * iOS Safari の MediaRecorder は MP4/AAC を使う場合があるため、
@@ -15,6 +15,7 @@ const ui = {
   save:$('save-btn'), status:$('status'), counter:$('counter'),
   time:$('time-label'), elapsed:$('elapsed'), stage:$('stage-label'),dna:$('dna-label'),
   led:$('led'), meter:$('meter-bars'),meterTitle:$('meter-title'),
+  groove:$('groove-btn'), grooveText:$('groove-state'),
 };
 const visual = new BugVisual($('visual-stage'));
 const MAX_RECORD_S = 12;
@@ -22,7 +23,10 @@ let context = null;
 let state = 'idle';
 let mediaStream = null, recorder = null, analyzer = null, meterData = null;
 let recordingTimer = null, recordingStart = 0;
-let original = null, rendered = null, playingSource = null, playingStart = 0;
+let original = null, rendered = null;
+let playingSource = null, grooveSource = null, grooveGain = null, playingStart = 0;
+let grooveEnabled = true;
+visual.setGroove(grooveEnabled);
 let counter = 0;
 let renderInProgress = false;
 const meterBars = Array.from({length:26},()=>{
@@ -48,6 +52,9 @@ function syncUI() {
   ui.playIcon.textContent=state==='playing'?'■':'▶';
   ui.save.disabled=!rendered || recording || renderInProgress || state==='requesting' || state==='loading';
   ui.meterTitle.textContent=recording?'LIVE MIC':state==='playing'?'PLAYBACK':'MIC INPUT';
+  ui.groove.setAttribute('aria-pressed',String(grooveEnabled));
+  ui.grooveText.textContent=grooveEnabled?'ON':'OFF';
+  ui.groove.classList.toggle('enabled',grooveEnabled);
 }
 function showError(err, action='ACTION') {
   console.error(err);
@@ -67,17 +74,29 @@ async function getContext() {
   return context;
 }
 function stopPlayback() {
-  const current = playingSource;
-  playingSource=null;
-  if(current) {
-    try { current.stop(); current.disconnect(); } catch (_) { /* 再生終了済みなら無視 */ }
+  const voice = playingSource, backing=grooveSource;
+  playingSource=null;grooveSource=null;grooveGain=null;
+  for (const src of [voice,backing]) {
+    if(src){try{src.stop();src.disconnect();}catch(_){/* すでに終了したソースは無視 */}}
   }
-  if(state==='playing') {
-    state=rendered?'hatched':'idle'; visual.setMode('hatched');
+  if(state==='playing'){
+    state=rendered?'hatched':'idle';visual.setMode('hatched');
     ui.stage.textContent=`HELLO, BUG #${String(counter).padStart(3,'0')}!`;
     setStatus('BUG IS READY TO LOOP.');
   }
-  visual.setProgress(0);
+  visual.setProgress(0);visual.setElapsed(0);
+  syncUI();
+}
+/** GROOVE を音楽の再生成なしに切り替える。現在の再生位置を保ったまま音量のみ変える。 */
+function toggleGroove(){
+  grooveEnabled=!grooveEnabled;
+  visual.setGroove(grooveEnabled);
+  if(grooveGain && context){
+    const now=context.currentTime;
+    grooveGain.gain.cancelScheduledValues(now);
+    grooveGain.gain.setTargetAtTime(grooveEnabled?1:0,now,.015);
+  }
+  setStatus(grooveEnabled?'GROOVE ON — TINY SOUNDS ADDED.':'GROOVE OFF — ONLY YOUR VOICE.');
   syncUI();
 }
 function releaseMic() {
@@ -173,7 +192,7 @@ async function doHatch() {
   if(!original || renderInProgress || ['recording','requesting','loading'].includes(state)) return;
   stopPlayback();
   renderInProgress=true;state='hatching';
-  ui.stage.textContent='HATCHING…';setStatus('CUTTING AND MUTATING YOUR SOUND…');syncUI();
+  ui.stage.textContent='HATCHING…';setStatus('MAKING A TINY SONG FROM YOUR VOICE…');syncUI();
   // 大きな同期処理の前に画面を少なくとも1フレーム描画する。
   await new Promise(resolve=>requestAnimationFrame(()=>setTimeout(resolve,0)));
   try {
@@ -182,7 +201,7 @@ async function doHatch() {
     counter++;
     ui.counter.textContent=`NO. ${String(counter).padStart(4,'0')}`;
     ui.stage.textContent=`HELLO, BUG #${String(counter).padStart(3,'0')}!`;
-    ui.dna.textContent=`${next.dna.name} / ${next.dna.cycleSeconds.toFixed(1)} SEC`;
+    ui.dna.textContent=`${next.dna.name} / ${next.dna.bpm} BPM`;
     ui.time.textContent=clock(next.duration);
     ui.elapsed.textContent=`${next.duration.toFixed(1)} SEC LOOP`;
     visual.setDna(next.dna);
@@ -191,32 +210,40 @@ async function doHatch() {
   } catch(err) {state=rendered?'hatched':'recorded';showError(err,'HATCH');}
   renderInProgress=false;syncUI();
 }
+/** 同じタイムスタンプから声と薄い伴奏を再生。ON/OFF後もループ位相がずれない。 */
 async function togglePlay() {
   if(state==='playing'){stopPlayback();return;}
   if(!rendered)return;
   try {
     const ctx=await getContext();
     stopPlayback();
-    const buffer=ctx.createBuffer(2,rendered.left.length,RATE);
-    buffer.copyToChannel(rendered.left,0);buffer.copyToChannel(rendered.right,1);
-    const source=ctx.createBufferSource();
-    source.buffer=buffer;source.loop=true;source.connect(ctx.destination);
-    playingSource=source;
-    playingStart=ctx.currentTime;
-    source.onended=()=>{
-      if(playingSource!==source)return;
-      playingSource=null;state='hatched';visual.setMode('hatched');
-      visual.setProgress(1);setStatus('THE BUG FINISHED ITS LITTLE SONG.');syncUI();
+    const toBuffer=(stereo)=>{
+      const buffer=ctx.createBuffer(2,stereo.left.length,RATE);
+      buffer.copyToChannel(stereo.left,0);buffer.copyToChannel(stereo.right,1);
+      return buffer;
     };
-    source.start(0);
+    const voice=ctx.createBufferSource();voice.buffer=toBuffer(rendered.voice);voice.loop=true;
+    const backing=ctx.createBufferSource();backing.buffer=toBuffer(rendered.groove);backing.loop=true;
+    const gain=ctx.createGain();gain.gain.value=grooveEnabled?1:0;
+    voice.connect(ctx.destination);backing.connect(gain);gain.connect(ctx.destination);
+    const when=ctx.currentTime+.04;
+    playingSource=voice;grooveSource=backing;grooveGain=gain;playingStart=when;
+    voice.onended=()=>{
+      if(playingSource!==voice)return;
+      playingSource=null;grooveSource=null;grooveGain=null;
+      state='hatched';visual.setMode('hatched');syncUI();
+    };
+    voice.start(when);backing.start(when);
     state='playing';visual.setMode('playing');
-    ui.stage.textContent='BUG IS LOOPING…';setStatus('LOOPING… TAP STOP TO END.');syncUI();
-  }catch(err){showError(err,'PLAY');}
+    ui.stage.textContent='BUG IS LOOPING…';
+    setStatus('LOOPING… TAP PLAY TO STOP.');syncUI();
+  }catch(err){stopPlayback();showError(err,'PLAY');}
 }
 async function saveWav() {
   if(!rendered)return;
-  const filename=`little-bugs-${String(counter).padStart(4,'0')}-${rendered.dna.name.toLowerCase().replace(/\s+/g,'-')}.wav`;
-  const blob=wavBlob(rendered);
+  const filename=`little-bugs-${String(counter).padStart(4,'0')}-${rendered.dna.name.toLowerCase().replace(/\s+/g,'-')}-${grooveEnabled?'groove':'voice'}.wav`;
+  // 再生中であっても、GROOVEの最新状態を含めたWAVを保存する。
+  const blob=wavBlob(mixLayers(rendered,grooveEnabled));
   const file=new File([blob],filename,{type:'audio/wav'});
   // iPhone では共有シートを優先し、ファイル App への保存を容易にする。
   // Web Share はユーザーの直接操作時のみ呼ぶ（ブラウザーの制約）。
@@ -252,12 +279,17 @@ function tick() {
   } else if(state==='playing' && context && rendered) {
     const elapsed=Math.max(0,(context.currentTime-playingStart)%rendered.duration);
     const progress=Math.min(1,elapsed/rendered.duration);
-    visual.setProgress(progress);
+    visual.setProgress(progress);visual.setElapsed(elapsed);
     ui.time.textContent=clock(elapsed);
     // 入力から生成した波形の短時間音量でメーターを動かす。人工的な拍は使わない。
-    const start=Math.min(rendered.left.length-1,Math.floor(elapsed*RATE));
+    const start=Math.min(rendered.voice.left.length-1,Math.floor(elapsed*RATE));
     let energy=0,n=0;
-    for(let k=0;k<1024;k+=8){const idx=(start+k)%rendered.left.length;energy+=rendered.left[idx]**2+rendered.right[idx]**2;n+=2;}
+    for(let k=0;k<1024;k+=8){
+      const idx=(start+k)%rendered.voice.left.length;
+      const x=rendered.voice.left[idx]+(grooveEnabled?rendered.groove.left[idx]:0);
+      const y=rendered.voice.right[idx]+(grooveEnabled?rendered.groove.right[idx]:0);
+      energy+=x*x+y*y;n+=2;
+    }
     meterLevel=Math.min(1,Math.sqrt(energy/Math.max(1,n))*3.2);
     visual.setLevel(meterLevel);
   } else visual.setLevel(0);
@@ -271,6 +303,7 @@ ui.rec.addEventListener('click',()=>state==='recording'?stopRecording():startRec
 ui.hatch.addEventListener('click',doHatch);
 ui.play.addEventListener('click',togglePlay);
 ui.save.addEventListener('click',saveWav);
+ui.groove.addEventListener('click',toggleGroove);
 window.addEventListener('pagehide',()=>{stopPlayback();releaseMic();});
 if('serviceWorker' in navigator && (location.protocol==='https:' || location.hostname==='localhost')) {
   window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(console.warn));

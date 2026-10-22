@@ -1,10 +1,8 @@
 {
-  "name": "little-bugs-voice-mutator",
-  "version": "0.2.0",
-  "private": true,
-  "type": "module",
-  "description": "Voice-only experimental loops and pocket LCD creatures.",
-  "scripts": {
-    "test": "node ./tests/engine-smoke.mjs"
-  }
+  "name":"little-bugs-voice-pets",
+  "version":"0.3.0",
+  "private":true,
+  "type":"module",
+  "description":"8-bit voice mutations, tiny musical loops, live groove mixing, and pixel pets.",
+  "scripts":{"test":"node ./tests/engine-smoke.mjs"}
 }

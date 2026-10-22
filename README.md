@@ -1,31 +1,28 @@
-# LITTLE BUGS — v0.2
+# LITTLE BUGS — v0.3
 
-A pocket-sized experimental voice toy. Record any sound and hatch it into a strange, repeating loop. Everything runs locally in your browser.
+An 8-bit voice toy. Record your voice and turn it into surprising little musical loops. Each loop hatches a different pixel pet.
 
-## Play
+## How to Play
 
-1. Tap **REC** and allow microphone access.
-2. Tap **STOP** when finished (12 seconds maximum).
-3. Tap **HATCH** to generate a new sound creature.
-4. Tap **PLAY** to start or stop the repeating loop.
-5. Tap **SAVE** to export a stereo WAV file.
+1. **REC** — Record your voice or a sound (up to 12 seconds).
+2. **STOP** — Finish recording.
+3. **HATCH** — Make a new loop and creature. Tap again for another variation.
+4. **PLAY** — Start or stop the loop. Tap the creature to see it react.
+5. **GROOVE** — Turn tiny accompanying sounds ON or OFF, even during playback.
+6. **SAVE** — Export the current result as a stereo WAV file.
 
-Tap **HATCH** again to create a different loop from the same recording.
+## Publish on GitHub Pages
 
-## Publish with GitHub Pages
+1. Upload all files and folders (not the ZIP) to the root of your repository. `index.html` must be at the top level.
+2. Open **Settings → Pages**.
+3. Choose **Deploy from a branch → main → /(root)** and save.
+4. Open the published URL shown on that page.
 
-1. Create a GitHub repository.
-2. Upload the **contents** of this folder to the repository root. Keep `index.html` at the top level.
-3. Open **Settings → Pages**.
-4. Set **Source** to **Deploy from a branch**, **Branch** to `main`, and **Folder** to `/(root)`. Save.
-5. Open the website URL displayed in Pages settings.
-
-On iPhone, open the site in Safari and choose **Share → Add to Home Screen**.
+On iPhone, open the site in Safari and select **Share → Add to Home Screen**.
 
 ## Notes
 
-- Use HTTPS or localhost for microphone access.
-- No account, backend, or audio uploads are required.
-- The saved WAV contains two variations of one repeating cycle.
-- Offline use becomes available after the site and its dependencies have been loaded once.
-- A real microphone and mobile-browser test is recommended before sharing the app.
+- Microphone recording needs HTTPS or localhost.
+- Audio stays on your device; no server or account is required.
+- GROOVE is optional. Exported WAV files reflect its current ON/OFF setting.
+- Reload the page after publishing a new version. A fresh microphone test on your device is recommended.
