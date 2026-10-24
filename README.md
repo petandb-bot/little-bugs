@@ -1,18 +1,22 @@
-# LITTLE BUGS v1.1.1 — Egg Parade
+# LITTLE BUGS v1.0 — Mutant Motion
 
-A tiny voice-to-music toy. Record, mutate, loop, and save.
+A tiny voice-to-music arcade. Record a sound, hatch a strange loop, and meet a pixel creature.
 
-## How to use
+## Play
 
-1. Tap **REC**, speak or sing, then **STOP** (up to 12 seconds).
-2. Tap **HATCH** to create a Bug and a strange musical loop. Hatch again for a new variation.
-3. Tap **PLAY** to listen and **GROOVE** to toggle the synth accompaniment.
-4. Tap **SAVE** to export a WAV file. Tap the creature to surprise it.
+1. Tap **REC**, speak or sing (up to 12 seconds), then tap **STOP**.
+2. Tap **HATCH** to create a new loop. Tap it again for another mutation.
+3. Tap **PLAY** to listen. **GROOVE** adds or removes a small synth accompaniment.
+4. Tap **SAVE** to export a stereo WAV. Tap the creature to make it jump.
 
-Egg colors, patterns, and shapes vary. Tap the egg to shuffle its shell; it cracks open when you hatch a Bug. Creatures have simple two-color pixel bodies.
+The app uses moving stereo echoes, rhythmic vocal effects, and simple synth melodies. Your recording stays on your device.
 
 ## Publish on GitHub Pages
 
-Upload the unzipped files to the repository root. In **Settings → Pages**, choose **Deploy from a branch**, **main**, **/(root)**, then save. Open the HTTPS link.
+Upload the unzipped files (including `index.html`) to the repository root. Open **Settings → Pages** and select **Deploy from a branch → main → /(root)**. Visit the published HTTPS site. On iPhone, open it in Safari and choose **Add to Home Screen**.
 
-Audio stays on your device. Test microphone permissions and saving on your phone.
+## Check
+
+Run `npm test` with Node.js 22+. Microphone recording and WAV sharing should also be checked on your own device.
+
+This project is independently developed; it does not contain commercial audio plug-ins.

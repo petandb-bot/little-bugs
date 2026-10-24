@@ -1,9 +1,8 @@
 import {hatch, wavBlob, monoFromAudioBuffer, RATE, mixLayers} from './audio-engine.js';
 import {BugVisual} from './visual.js';
-import {bugName} from './bug-names.js';
 
 /**
- * LITTLE BUGS v1.1.1 — random egg shells and hatching animation; audio engine unchanged
+ * LITTLE BUGS v1.0 — recording, live GROOVE switch and export
  *
  * データは端末上のメモリーにのみ保持します。
  * iOS Safari の MediaRecorder は MP4/AAC を使う場合があるため、
@@ -28,8 +27,7 @@ let original = null, rendered = null;
 let playingSource = null, grooveSource = null, grooveGain = null, playingStart = 0;
 let grooveEnabled = true;
 visual.setGroove(grooveEnabled);
-let currentName=null;
-let lastName=null;
+let counter = 0;
 // HATCHを何度押しても同じ作曲方式に偏らないよう、5レシピのシャッフル袋を使用する。
 // 各袋を引き切るまで同じレシピは登場せず、袋の境目でも連続重複を避ける。
 const recipeIds=['PHRASE','MANTRA','RAP','CHOIR','BROKEN'];
@@ -100,7 +98,7 @@ function stopPlayback() {
   }
   if(state==='playing'){
     state=rendered?'hatched':'idle';visual.setMode('hatched');
-    ui.stage.textContent=currentName?`HELLO, ${currentName}!`:'BUG IS READY';
+    ui.stage.textContent=`MUTATION NO. ${String(counter).padStart(4,'0')}`;
     setStatus('BUG IS READY TO LOOP.');
   }
   visual.setProgress(0);visual.setElapsed(0);
@@ -132,8 +130,6 @@ function preferredMime() {
 async function startRecording() {
   if(renderInProgress || state==='recording') return;
   stopPlayback();
-  const previousDna=rendered?.dna||null;
-  visual.newEgg();visual.setDna(null);
   state='requesting'; setStatus('OPENING MICROPHONE…'); syncUI();
   try {
     if(!navigator.mediaDevices?.getUserMedia) throw new Error('Microphone needs HTTPS or localhost.');
@@ -167,8 +163,6 @@ async function startRecording() {
         if(decoded.duration < .22) throw new Error('Recording too short');
         original=monoFromAudioBuffer(decoded);
         rendered=null;
-        currentName=null;
-        ui.counter.textContent='BUG: ???';
         visual.setDna(null);
         state='recorded';
         ui.stage.textContent='VOICE CAPTURED!';
@@ -196,7 +190,7 @@ async function startRecording() {
     syncUI();
     recordingTimer=setTimeout(stopRecording,MAX_RECORD_S*1000);
   }catch(err){
-    releaseMic();visual.setDna(previousDna);state=original?'recorded':'idle';syncUI();showError(err,'RECORD');
+    releaseMic();state=original?'recorded':'idle';syncUI();showError(err,'RECORD');
   }
 }
 function stopRecording() {
@@ -215,31 +209,22 @@ async function doHatch() {
   if(!original || renderInProgress || ['recording','requesting','loading'].includes(state)) return;
   stopPlayback();
   renderInProgress=true;state='hatching';
-  const previousDna=rendered?.dna||null;
-  if(visual.bug)visual.newEgg();
-  visual.setDna(null);
   ui.stage.textContent='HATCHING…';setStatus('MUTATING / ECHOING YOUR VOICE…');syncUI();
   // 大きな同期処理の前に画面を少なくとも1フレーム描画する。
   await new Promise(resolve=>requestAnimationFrame(()=>setTimeout(resolve,0)));
   try {
     const next=hatch(original,newSeed(),nextRecipe());
-    // 波形生成後に短い孵化アニメーションを表示。音声加工への影響は与えない。
-    visual.setMode('hatching');
-    await new Promise(resolve=>setTimeout(resolve,410));
     rendered=next;
-    currentName=bugName(next.dna.sprite);
-    // 連続した偶然の同名だけ別名にする。番号を増やさない。
-    if(currentName===lastName)currentName=bugName(next.dna.sprite^0xA82C07);
-    lastName=currentName;
-    ui.counter.textContent=`BUG: ${currentName}`;
-    ui.stage.textContent=`HELLO, ${currentName}!`;
+    counter++;
+    ui.counter.textContent=`NO. ${String(counter).padStart(4,'0')}`;
+    ui.stage.textContent=`MUTATION NO. ${String(counter).padStart(4,'0')}`;
     ui.dna.textContent=`VOICE MUTATION / ${next.dna.bpm} BPM`;
     ui.time.textContent=clock(next.duration);
     ui.elapsed.textContent=`${next.duration.toFixed(1)} SEC LOOP`;
     visual.setDna(next.dna);
     setStatus('IT LIVES. TAP PLAY OR HATCH AGAIN.');
     state='hatched';
-  } catch(err) {visual.setDna(previousDna);state=rendered?'hatched':'recorded';showError(err,'HATCH');}
+  } catch(err) {state=rendered?'hatched':'recorded';showError(err,'HATCH');}
   renderInProgress=false;syncUI();
 }
 /** 同じタイムスタンプから声と薄い伴奏を再生。ON/OFF後もループ位相がずれない。 */
@@ -267,13 +252,13 @@ async function togglePlay() {
     };
     voice.start(when);backing.start(when);
     state='playing';visual.setMode('playing');
-    ui.stage.textContent=currentName?`${currentName} IS DANCING!`:'BUG IS LOOPING…';
+    ui.stage.textContent='BUG IS LOOPING…';
     setStatus('LOOPING… TAP PLAY TO STOP.');syncUI();
   }catch(err){stopPlayback();showError(err,'PLAY');}
 }
 async function saveWav() {
   if(!rendered)return;
-  const filename=`little-bugs-${(currentName||'hatch').toLowerCase()}-${grooveEnabled?'groove':'voice'}.wav`;
+  const filename=`little-bugs-${String(counter).padStart(4,'0')}-${grooveEnabled?'groove':'voice'}.wav`;
   // 再生中であっても、GROOVEの最新状態を含めたWAVを保存する。
   const blob=wavBlob(mixLayers(rendered,grooveEnabled));
   const file=new File([blob],filename,{type:'audio/wav'});

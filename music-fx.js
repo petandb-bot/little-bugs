@@ -1,5 +1,5 @@
 /**
- * LITTLE BUGS v1.1 — MOVING VOICE & TOY MUSIC
+ * LITTLE BUGS v1.0 — MOVING VOICE & TOY MUSIC
  *
  * すべて独立したWeb Audio向けの波形処理。商用プラグインのコードやアルゴリズムは使用しない。
  * エフェクトを単に直列に積み上げず、発音がある部分に限って短い「事件」を起こす。
@@ -21,24 +21,6 @@ function monoEnergy(a,b,from,to){let sum=0,n=0;
  * 小節の一定位置だけを壊すのではなく、発話イベントの中に加工を置く。
  * エフェクトを適用しない区間には元の声がそのまま残る。
  */
-/**
- * Beat Repeat の接続を滑らかにするサンプラー。
- * 反復の最後と次の冒頭を短いクロスフェードでつなぎ、ゼロ交差に
- * 依存しないクリック対策を行う。特に破裂音の短い繰り返しに有効。
- */
-export function seamlessRepeatSample(source,start,local,cell,overlap){
- const period=Math.max(2,cell-overlap),phase=local%period;
- const at=start+phase;
- if(phase>=overlap)return source[at]||0;
- const t=phase/Math.max(1,overlap);
- // 線形クロスフェード: 同相の声を重ねても一時的に過大音量になりにくい。
- return (source[at+period]||0)*(1-t)+(source[at]||0)*t;
-}
-
-/**
- * Effectrix 型の短い変異。ただし短い stutter のクリックと反復ピークは抑える。
- * 各処理イベントの開始・終了でも18ms程度の短いフェードを付ける。
- */
 export function applyStepMutations(layer,dna,seed,events,rate=44100){
  const rng=randomFactory(seed),n=layer.left.length,beat=60/dna.bpm,barDuration=n/rate/4;
  const srcL=layer.left.slice(),srcR=layer.right.slice();
@@ -56,41 +38,27 @@ export function applyStepMutations(layer,dna,seed,events,rate=44100){
    const begin=Math.max(0,Math.floor(start*rate)),end=Math.min(n,Math.floor((start+duration)*rate));
    if(monoEnergy(srcL,srcR,begin,end)<.0025)continue;
    const type=effects[(bar*3+k+Math.floor(rng()*5))%effects.length];
-   const amount=dna.id==='BROKEN'?.76:dna.id==='CHOIR'?.39:.52;
-   const targetCell=Math.round(beat*rate*(type==='half'?.20:.115));
-   const cell=Math.max(320,Math.min(targetCell,end-begin));
-   const overlap=Math.min(Math.round(rate*.010),Math.floor(cell*.24));
-   const edge=Math.min(Math.round(rate*.022),Math.floor((end-begin)/6));
-   let holdL=0,holdR=0,stutterLpL=0,stutterLpR=0,peak=0,safeGain=1;
-   const lpAlpha=1-Math.exp(-2*Math.PI*6700/rate);
+   const amount=dna.id==='BROKEN'?.82:dna.id==='CHOIR'?.43:.56;
+   const cell=Math.max(250,Math.round(beat*rate*(type==='half'?.20:.115)));
+   const edge=Math.min(Math.round(rate*.018),Math.floor((end-begin)/7));
+   let holdL=0,holdR=0;
    for(let i=begin;i<end;i++){
-    const local=i-begin;
-    // 最初と最後はドライ波形へ戻し、イベント両端の不連続を防ぐ。
-    const edgeGain=Math.max(0,Math.min(1,local/Math.max(1,edge),(end-1-i)/Math.max(1,edge)));
-    const wet=amount*edgeGain;
-    const pos=clamp(type==='reverse'?end-1-local:type==='half'?begin+Math.floor(local*.53)%Math.max(1,end-begin):i,0,n-1);
-    let addL=srcL[pos],addR=srcR[pos];
-    if(type==='stutter'){
-     addL=seamlessRepeatSample(srcL,begin,local,cell,overlap);
-     addR=seamlessRepeatSample(srcR,begin,local,cell,overlap);
-     // スタッターはトランジェントが数十回続くと耳障りになる。
-     // 6.7kHz の穏やかなLPと高速ピークフォロワーで局所的に抑える。
-     stutterLpL+=(addL-stutterLpL)*lpAlpha;
-     stutterLpR+=(addR-stutterLpR)*lpAlpha;
-     peak=Math.max(Math.max(Math.abs(stutterLpL),Math.abs(stutterLpR)),peak*.9994);
-     const target=peak>.30?.30/peak:1;
-     safeGain+=(target-safeGain)*.006;
-     addL=stutterLpL*safeGain*.88;
-     addR=stutterLpR*safeGain*.88;
-    }
+    const local=i-begin,progress=local/(end-begin),env=Math.min(1,local/Math.max(1,edge),(end-1-i)/Math.max(1,edge));
+    const wet=amount*clamp(env,0,1);
+    let pos=i,addL,addR;
+    if(type==='stutter')pos=begin+(local%cell);
+    else if(type==='reverse')pos=end-1-local;
+    else if(type==='half')pos=begin+Math.floor(local*.53)%Math.max(1,end-begin);
+    pos=clamp(pos,0,n-1);
+    addL=srcL[pos];addR=srcR[pos];
     if(type==='crush'){
-     if(local%11===0){holdL=Math.round(addL*24)/24;holdR=Math.round(addR*24)/24;}
-     // 折り返しノイズを削るためドライ成分を少し残して控えめに混合。
-     addL=mix(addL,holdL,.67);addR=mix(addR,holdR,.67);
+     if(local%11===0){holdL=Math.round(addL*22)/22;holdR=Math.round(addR*22)/22;}
+     addL=holdL;addR=holdR;
     }
     if(type==='gate'){
-     const gate=(local%cell)<cell*.63?1:.10;addL*=gate;addR*=gate;
+     const gate=(local%cell)<cell*.63?1:.08;addL*=gate;addR*=gate;
     }
+    // 部分変異を高音量で上書きせず、原音との比率を保持する。
     layer.left[i]=mix(srcL[i],addL,wet);
     layer.right[i]=mix(srcR[i],addR,wet);
    }

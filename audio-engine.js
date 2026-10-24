@@ -1,6 +1,6 @@
 import {applyStepMutations,applyMovingPan,applyToyDelay,planToyMusic,renderToyMusic,duckSynthAgainstVoice} from './music-fx.js';
 /**
- * LITTLE BUGS v1.1 — MUTANT MOTION (TRANSIENT-SAFE REPEAT)
+ * LITTLE BUGS v1.0 — MUTANT MOTION
  *
  * 設計原則：短い声をドラム用の極小断片に分解するのではなく、
  * 先に息継ぎ・無音・発音のまとまりからフレーズを抽出する。

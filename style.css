@@ -1,4 +1,4 @@
-/* LITTLE BUGS v1.1 — 直角・ドット・毒々しい少数色の初期ファミコン風筐体 */
+/* LITTLE BUGS v0.6 — 直角・ドット・毒々しい少数色の初期ファミコン風筐体 */
 :root{--ink:#1B122C;--paper:#F6EED9;--cream:#E4DFD4;--purple:#4C2A6A;--pink:#F15696;--lime:#D5FA56;--orange:#F3B34D;--mint:#91ECD1;--screen:#17102D;font-family:'Press Start 2P',ui-monospace,monospace;font-synthesis:none;-webkit-font-smoothing:none;text-rendering:optimizeSpeed}
 *{box-sizing:border-box}
 html{background:var(--ink);min-height:100%;}
@@ -42,14 +42,3 @@ h1 span{color:#D9FF6E;text-shadow:3px 3px 0 #5C4360}h1 em{font-style:normal;colo
 .page-foot span:last-child{color:#FAA3CE;text-align:right}
 @media(max-width:360px){.app-shell{padding:14px 8px 26px}.toy{padding:9px;box-shadow:5px 6px 0 #F355A0}.version-tag{min-width:43px;padding:5px 3px;font-size:8px}h1{font-size:18px}.pretitle{font-size:6px}.visual-stage{min-height:178px}.screen-bezel{padding:7px 5px}.control{min-height:65px;gap:4px;font-size:11px}.groove-copy strong{font-size:11px}.tiny-badge{width:22px;height:22px}.groove-switch{min-width:67px;font-size:10px}}
 @media(prefers-reduced-motion:reduce){.led.rec{animation:none}.control{transition:none}}
-
-/* 右上のLBナンバーバッジを廃止。ファミコン風の小さな不定形アイコンに変更。 */
-.pixel-emblem{position:relative;flex-shrink:0;width:53px;height:54px;border:3px solid #F1B557;background:#241837;box-shadow:4px 4px 0 #8E4C8D;image-rendering:pixelated}
-.pixel-emblem span{position:absolute;display:block}
-.emblem-core{left:11px;top:13px;width:27px;height:25px;background:#D7FE67;clip-path:polygon(0 32%,18% 32%,18% 0,44% 0,44% 20%,69% 20%,69% 0,88% 0,88% 33%,100% 33%,100% 83%,74% 83%,74% 100%,18% 100%,18% 80%,0 80%)}
-.emblem-eye{top:24px;width:5px;height:5px;background:#211329}
-.emblem-eye.a{left:21px}.emblem-eye.b{left:34px}
-.emblem-foot{top:40px;width:5px;height:5px;background:#F16AA7}
-.emblem-foot.a{left:16px}.emblem-foot.b{left:34px}
-.emblem-spark{left:7px;top:7px;width:5px;height:5px;background:#F3CF63}
-@media(max-width:360px){.pixel-emblem{width:44px;height:46px;transform:scale(.88);transform-origin:right center}}
