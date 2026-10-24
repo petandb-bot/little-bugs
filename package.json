@@ -1,10 +1,10 @@
 {
   "name": "little-bugs-voice-pets",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "description": "Moving stereo effects, rhythmic mutations, and synth groove from recorded voice.",
   "scripts": {
-    "test": "node ./tests/engine-smoke.mjs"
+    "test": "node ./tests/engine-smoke.mjs && node ./tests/v1.1-regression.mjs"
   }
 }

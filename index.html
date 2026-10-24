@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./style.css">
-  <title>LITTLE BUGS / FILTER ECHO GROOVE</title>
+  <title>LITTLE BUGS / MUTANT MICRO PETS</title>
 </head>
 <body>
   <main class="app-shell">
@@ -25,11 +25,11 @@
         <h1>LITTLE <span>BUGS</span><em>!</em></h1>
         <div class="subtitle">INSERT VOICE / EXPECT TROUBLE</div>
       </div>
-      <div class="version-tag">LB<br>08</div>
+      <div class="pixel-emblem" aria-hidden="true"><span class="emblem-core"></span><span class="emblem-eye a"></span><span class="emblem-eye b"></span><span class="emblem-foot a"></span><span class="emblem-foot b"></span><span class="emblem-spark"></span></div>
     </header>
 
     <section class="toy" aria-label="Little Bugs sound arcade">
-      <div class="toy-top"><span><i class="led" id="led"></i> MUTATION DEVICE</span><span id="counter">NO. 0000</span></div>
+      <div class="toy-top"><span><i class="led" id="led"></i> MUTATION DEVICE</span><span id="counter">BUG: ???</span></div>
       <div class="screen-bezel">
         <div class="screen-sign"><span>◀ BUG VISION ▶</span><span>198X</span></div>
         <div class="display-frame">
@@ -57,7 +57,7 @@
     </section>
     <footer class="page-foot"><span>THIS MACHINE EATS SOUNDS.</span><span>LOCAL AUDIO · WAV EXPORT</span></footer>
   </main>
-  <!-- 日本語メモ：p5.jsはドット描画専用。音の処理・録音・保存はブラウザー標準のAPIで完結する。 -->
+  <!-- p5.js is used for optional pixel rendering; audio is processed locally. -->
   <script src="https://cdn.jsdelivr.net/npm/p5@1.11.13/lib/p5.min.js" defer></script>
   <script type="module" src="./app.js"></script>
 </body>

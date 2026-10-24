@@ -1,22 +1,18 @@
-# LITTLE BUGS v1.0 — Mutant Motion
+# LITTLE BUGS v1.1 — Mutant Micro Pets
 
-A tiny voice-to-music arcade. Record a sound, hatch a strange loop, and meet a pixel creature.
+Record a sound. Hatch a tiny creature and a strange musical loop.
 
-## Play
+## Controls
 
-1. Tap **REC**, speak or sing (up to 12 seconds), then tap **STOP**.
-2. Tap **HATCH** to create a new loop. Tap it again for another mutation.
-3. Tap **PLAY** to listen. **GROOVE** adds or removes a small synth accompaniment.
-4. Tap **SAVE** to export a stereo WAV. Tap the creature to make it jump.
+1. Press **REC** and speak or sing for up to 12 seconds. Press **STOP**.
+2. Press **HATCH** to generate a new loop and a new Bug. Repeat for more variations.
+3. Press **PLAY** to listen. **GROOVE** toggles the synth accompaniment.
+4. Press **SAVE** to export a WAV file. Tap the Bug to surprise it.
 
-The app uses moving stereo echoes, rhythmic vocal effects, and simple synth melodies. Your recording stays on your device.
+Audio stays on your device. Beat-repeat transitions are softened to reduce clicks and distortion.
 
-## Publish on GitHub Pages
+## GitHub Pages
 
-Upload the unzipped files (including `index.html`) to the repository root. Open **Settings → Pages** and select **Deploy from a branch → main → /(root)**. Visit the published HTTPS site. On iPhone, open it in Safari and choose **Add to Home Screen**.
+Upload the unzipped files to your repository root. In **Settings → Pages**, select **Deploy from a branch**, **main**, **/(root)**. Open the published HTTPS address.
 
-## Check
-
-Run `npm test` with Node.js 22+. Microphone recording and WAV sharing should also be checked on your own device.
-
-This project is independently developed; it does not contain commercial audio plug-ins.
+Run `npm test` with Node.js 22+ to test the audio engine. Check recording and saving on your own phone.
