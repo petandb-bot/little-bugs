@@ -1,7 +1,7 @@
 import {mulberry32} from './audio-engine.js';
 
 /**
- * LITTLE BUGS v1.1.1 — MICRO PETS / EGG PARADE
+ * LITTLE BUGS v1.1.2 — ROUND EGG PARADE
  * 17×17 の小さなセルから、描き込みすぎない異なる輪郭を生成する。
  * 顔は目と口だけ。個体の動きは歩幅、跳ね方、浮遊、伸縮のリズムで変える。
  * スプライトもアニメーションも Canvas 2D / p5.js 共通の描画関数で扱う。
@@ -35,38 +35,57 @@ const SHAPE_RULES=[
  * 色・殻の幅・模様をシードから決定し、読み込み時や次の録音時に再抽選する。
  * キャラクターの顔に見える左右対称の２点模様は避ける。
  */
-const EGG_COLORS=[
- ['#FFF1B8','#FD78A9'],['#FAD6F2','#9E86E6'],['#CCFADE','#F2AB63'],
- ['#FBE9B5','#86DDD8'],['#FFD1B0','#E780D3'],['#EAF8CC','#F39178'],
- ['#DDD4FC','#B8F270'],['#F8E2C8','#8EA7E9']
+// 卵の「個体差」は模様だけでなく、卵の輪郭にも割り当てる。
+// 17×17 グリッド上で、丸型／縦長／下膨れなど6種類の卵型だけを使う。
+// 各行の値は中心 x=8 から左右対称に塗るピクセルの個数（常に奇数）。
+export const EGG_SHAPES=[
+ {name:'ROUND', widths:[3,7,9,11,13,15,15,15,15,15,15,15,13,11,9,7,3]},
+ {name:'CLASSIC',widths:[1,3,5,7,9,11,13,13,15,15,15,15,13,11,9,7,3]},
+ {name:'PLUMP',widths:[1,5,9,11,13,15,15,15,15,15,15,15,15,13,11,7,3]},
+ {name:'LONG', widths:[1,3,5,7,9,9,11,11,11,11,11,11,11,9,7,5,3]},
+ {name:'PEAR', widths:[1,3,5,5,7,9,11,13,15,15,15,15,15,15,13,11,7]},
+ {name:'SOFT', widths:[0,3,7,11,13,15,15,15,15,15,15,13,11,7,3,0,0]}
 ];
-const EGG_ROWS=[[7,9],[6,10],[5,11],[5,11],[4,12],[4,12],[3,13],[3,13],[2,14],[2,14],[2,14],[2,14],[2,14],[3,13],[3,13],[4,12],[5,11]];
+// カラフルさを保ちつつ、殻らしい淡いクリーム／桃／青／緑を基調にする。
+const EGG_COLORS=[
+ ['#FFF1D1','#D7A578'],['#F8F5E7','#B6B4A1'],
+ ['#DBE9F2','#88A8B8'],['#F5DBE8','#C69AB2'],
+ ['#E7F1D6','#ACBA8A'],['#FFE2BA','#D6AA7B'],
+ ['#E3DCF2','#A9A1C7'],['#F5DDD0','#C5A39B'],
+ ['#F4ECC9','#B6BD95'],['#DAE9DF','#93B3A6']
+];
 export function makePixelEgg(seed){
- const r=mulberry32(seed>>>0),style=Math.floor(r()*8),palette=EGG_COLORS[Math.floor(r()*EGG_COLORS.length)];
- const widthShift=Math.floor(r()*3)-1,body=Array.from({length:S},()=>Array(S).fill(false));
+ const r=mulberry32(seed>>>0);
+ const shapeIndex=Math.floor(r()*EGG_SHAPES.length);
+ const shape=EGG_SHAPES[shapeIndex];
+ const style=Math.floor(r()*8);
+ const palette=EGG_COLORS[Math.floor(r()*EGG_COLORS.length)];
+ const body=Array.from({length:S},()=>Array(S).fill(false));
  const accent=Array.from({length:S},()=>Array(S).fill(false));
- const sparkSeed=Math.floor(r()*4096),slope=r()>.5?1:-1;
+ const markSeed=Math.floor(r()*65535), slant=r()>.5?1:-1;
+ const marks=[];
+ // 模様は殻の中腹〜下部にだけ発生。左右対称の「目」に見える模様は描かない。
  for(let y=0;y<S;y++)for(let x=0;x<S;x++){
-  const [min,max]=EGG_ROWS[y];
-  // 上部は細く、下部は丸い、底が軽くすぼまる卵形。輪郭の差は控えめ。
-  const lowerShift=y>=8&&y<=12?widthShift:0;
-  const inside=x>=min-Math.max(0,lowerShift)&&x<=max+Math.max(0,lowerShift)
-       &&(lowerShift>=0 || y<8 || y>12 ||(x>min&&x<max));
-  body[y][x]=inside;
-  if(!inside || y<4 || x<=min || x>=max)continue;
-  const hash=(Math.imul(x+17,1103515245)^Math.imul(y+sparkSeed+3,2654435761))>>>0;
-  const detail=hash%13;
-  // 模様は斑点、帯、波線、斜線、片寄ったパッチなど。決して顔を描かない。
-  if(style===0)accent[y][x]=(y>=10&&x<=10&&detail<4);
-  if(style===1)accent[y][x]=(y===10||y===11||y===14);
-  if(style===2)accent[y][x]=(y>=7&&y<=13&&((x+slope*y+23)%5===0));
-  if(style===3)accent[y][x]=(y>=8&&Math.abs((x-8)+slope*(y-11))<=1);
-  if(style===4)accent[y][x]=(y>=10&&((x+2*y)%3!==0));
-  if(style===5)accent[y][x]=(y>=9&&x>=9&&((x+3*y+sparkSeed)%5===0));
-  if(style===6)accent[y][x]=(y>=9&&y<=12&&Math.abs(x-(6+slope*(y-10)))<=1);
-  if(style===7)accent[y][x]=(y>=8&&detail<3&&((x+y)%3!==1));
+  const width=shape.widths[y];
+  if(width===0)continue; // 横長の卵は最上段・最下段を空白にする
+  const min=8-Math.floor(width/2),max=8+Math.floor(width/2);
+  if(x<min||x>max)continue;
+  body[y][x]=true;
+  if(y<5||x<=min+1||x>=max-1)continue;
+  const hash=(Math.imul(x+markSeed,2654435761)^Math.imul(y+11,2246822519))>>>0;
+  const sparse=(hash%19)<3;
+  let marked=false;
+  if(style===0)marked=y>=9&&sparse;
+  if(style===1)marked=(y===11||y===12)&&x>=6;
+  if(style===2)marked=y>=8&&(x+slant*y+37)%7===0;
+  if(style===3)marked=y>=10&&x<8&&sparse;
+  if(style===4)marked=y>=8&&y<=13&&Math.abs(x-(8+slant*(y-10)))<=1;
+  if(style===5)marked=y>=10&&((x+2*y+markSeed)%5===0);
+  if(style===6)marked=y>=10&&y<=13&&(y===11||x>9);
+  if(style===7)marked=y>=7&&y<=14&&sparse&&x>5;
+  accent[y][x]=marked;
  }
- return {seed:seed>>>0,style,body,accent,shell:palette[0],pigment:palette[1]};
+ return {seed:seed>>>0,shapeIndex,shapeName:shape.name,style,body,accent,shell:palette[0],pigment:palette[1]};
 }
 
 export function makePixelBug(seed){

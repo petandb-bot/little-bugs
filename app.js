@@ -3,7 +3,7 @@ import {BugVisual} from './visual.js';
 import {bugName} from './bug-names.js';
 
 /**
- * LITTLE BUGS v1.1.1 — random egg shells and hatching animation; audio engine unchanged
+ * LITTLE BUGS v1.1.2 — random egg shells and hatching animation; audio engine unchanged
  *
  * データは端末上のメモリーにのみ保持します。
  * iOS Safari の MediaRecorder は MP4/AAC を使う場合があるため、

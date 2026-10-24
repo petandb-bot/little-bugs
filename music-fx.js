@@ -225,7 +225,8 @@ export function planToyMusic(voiceEvents,dna,seed,duration,pitchHz){
  const pitchClass=((midiRoot%12)+12)%12;
  const leadRoot=60+pitchClass; // C4より上に置いて低音のモゴモゴを避ける
  const bassRoot=48+pitchClass;
- const mode=rng()<.5?'SUS':'PENTA';
+ const classicMode=rng()<.5?'SUS':'PENTA';
+ const mode=randomFactory((seed^0x63A2F1)>>>0)()<.24?'HOUSE':classicMode;
  const intervals=mode==='SUS'?[0,2,5,7,9]:[0,2,4,7,9];
  const motifs=[[0,2,1,3],[0,1,3,2],[0,2,3,1],[0,3,2,1]];
  const motif=motifs[Math.floor(rng()*motifs.length)];
@@ -234,6 +235,39 @@ export function planToyMusic(voiceEvents,dna,seed,duration,pitchHz){
  const first=audible.length?audible[0].time:0;
  const phase=clamp(Math.round((first%beat)/(beat*.25))*.25,0,.5)*beat;
  const barBeats=bar/beat;
+ // HOUSEは約1/4のHATCHだけで出現。既存モードの構成は変更しない。
+ // 4つ打ちを模した短い音程のあるベース／裏拍プラック／小さなコードで、
+ // 独立したドラム音源を追加せず、声との一体感と玩具らしさを維持する。
+ if(mode==='HOUSE'){
+  const stepCount=Math.round(barBeats);  // 4拍または6拍、既存ループと同じクロック
+  const rootClass=leadRoot;
+  for(let b=0;b<4;b++){
+   const start=b*bar;
+   for(let k=0;k<stepCount;k++){
+    // 4つ打ちの拍ごとにチープな短いベース。極低域は増やさない。
+    const note=b===2&&k===stepCount-1?5:0;
+    events.push({kind:'bass',time:start+(k+.03)*beat+phase*.12,
+      duration:Math.min(.19,beat*.36),frequency:midiToHz(bassRoot+note),
+      gain:k===0?.27:.18,pan:k%2===0?-.08:.07,bar:b});
+   }
+   // オフビートに短いシンセ。A-A-B-Aの形を残す。
+   for(let j=0;j<2;j++){
+    const step=j===0?.50:Math.min(barBeats-.53,barBeats*.57);
+    const ix=motif[(j+(b===2?1:0))%4];
+    events.push({kind:'pluck',time:start+step*beat+phase*.16,
+      duration:Math.min(.30,beat*.47),frequency:midiToHz(rootClass+intervals[ix]),
+      gain:j===0?.25:.21,pan:j===0?-.17:.20,bar:b});
+   }
+   // コードは小さく、連続しすぎない。発音の隙間に残響を作る。
+   for(let j=0;j<2;j++){
+    const root=rootClass+(b===2?5:0);
+    events.push({kind:'pad',time:start+(j===0?1.48:Math.min(barBeats-.56,3.48))*beat,
+      duration:Math.min(.32,beat*.62),frequency:midiToHz(root+(j===0?0:7)),
+      gain:j===0?.091:.071,pan:j===0?-.23:.23,bar:b});
+   }
+  }
+  return {events,rootMidi:leadRoot,mode,phase};
+ }
  for(let b=0;b<4;b++){
   const start=b*bar;
   // キック風の重低音ではなく、丸いベース音を小節の頭に短く配置。
