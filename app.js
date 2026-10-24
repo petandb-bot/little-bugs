@@ -3,7 +3,7 @@ import {BugVisual} from './visual.js';
 import {bugName} from './bug-names.js';
 
 /**
- * LITTLE BUGS v1.1 — animated pixel pets, gentle repeat cuts and synth groove
+ * LITTLE BUGS v1.1.1 — random egg shells and hatching animation; audio engine unchanged
  *
  * データは端末上のメモリーにのみ保持します。
  * iOS Safari の MediaRecorder は MP4/AAC を使う場合があるため、
@@ -132,6 +132,8 @@ function preferredMime() {
 async function startRecording() {
   if(renderInProgress || state==='recording') return;
   stopPlayback();
+  const previousDna=rendered?.dna||null;
+  visual.newEgg();visual.setDna(null);
   state='requesting'; setStatus('OPENING MICROPHONE…'); syncUI();
   try {
     if(!navigator.mediaDevices?.getUserMedia) throw new Error('Microphone needs HTTPS or localhost.');
@@ -194,7 +196,7 @@ async function startRecording() {
     syncUI();
     recordingTimer=setTimeout(stopRecording,MAX_RECORD_S*1000);
   }catch(err){
-    releaseMic();state=original?'recorded':'idle';syncUI();showError(err,'RECORD');
+    releaseMic();visual.setDna(previousDna);state=original?'recorded':'idle';syncUI();showError(err,'RECORD');
   }
 }
 function stopRecording() {
@@ -213,11 +215,17 @@ async function doHatch() {
   if(!original || renderInProgress || ['recording','requesting','loading'].includes(state)) return;
   stopPlayback();
   renderInProgress=true;state='hatching';
+  const previousDna=rendered?.dna||null;
+  if(visual.bug)visual.newEgg();
+  visual.setDna(null);
   ui.stage.textContent='HATCHING…';setStatus('MUTATING / ECHOING YOUR VOICE…');syncUI();
   // 大きな同期処理の前に画面を少なくとも1フレーム描画する。
   await new Promise(resolve=>requestAnimationFrame(()=>setTimeout(resolve,0)));
   try {
     const next=hatch(original,newSeed(),nextRecipe());
+    // 波形生成後に短い孵化アニメーションを表示。音声加工への影響は与えない。
+    visual.setMode('hatching');
+    await new Promise(resolve=>setTimeout(resolve,410));
     rendered=next;
     currentName=bugName(next.dna.sprite);
     // 連続した偶然の同名だけ別名にする。番号を増やさない。
@@ -231,7 +239,7 @@ async function doHatch() {
     visual.setDna(next.dna);
     setStatus('IT LIVES. TAP PLAY OR HATCH AGAIN.');
     state='hatched';
-  } catch(err) {state=rendered?'hatched':'recorded';showError(err,'HATCH');}
+  } catch(err) {visual.setDna(previousDna);state=rendered?'hatched':'recorded';showError(err,'HATCH');}
   renderInProgress=false;syncUI();
 }
 /** 同じタイムスタンプから声と薄い伴奏を再生。ON/OFF後もループ位相がずれない。 */
