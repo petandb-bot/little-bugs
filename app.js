@@ -3,7 +3,7 @@ import {BugVisual} from './visual.js';
 import {bugName} from './bug-names.js';
 
 /**
- * LITTLE BUGS v1.1.2 — random egg shells and hatching animation; audio engine unchanged
+ * LITTLE BUGS v1.1.3 — six distinct sonic identities, existing GUI and groove preserved
  *
  * データは端末上のメモリーにのみ保持します。
  * iOS Safari の MediaRecorder は MP4/AAC を使う場合があるため、
@@ -34,6 +34,27 @@ let lastName=null;
 // 各袋を引き切るまで同じレシピは登場せず、袋の境目でも連続重複を避ける。
 const recipeIds=['PHRASE','MANTRA','RAP','CHOIR','BROKEN'];
 let recipeBag=[],lastRecipe=null;
+// HATCHの聴感差を保証するため、音響性格もシャッフル袋で選ぶ。
+// エイリアン声を二枠にし、Echoは7回中1枠だけにする。
+const fxIds=['ALIEN','ALIEN','CUTUP','FILTER','CRUSH','CRYSTAL','ECHO'];
+let fxBag=[],lastFx=null;
+function nextFx(){
+  if(!fxBag.length){
+    fxBag=fxIds.slice();
+    for(let i=fxBag.length-1;i>0;i--){
+      const j=Math.floor(Math.random()*(i+1));[fxBag[i],fxBag[j]]=[fxBag[j],fxBag[i]];
+    }
+    // 隣接HATCHで同じ性格が続かないよう、重複するALIEN枠も分散。
+    for(let attempt=0;attempt<30;attempt++){
+      const okay=fxBag[0]!==lastFx && fxBag.every((x,i)=>i===0||x!==fxBag[i-1]);
+      if(okay)break;
+      for(let i=fxBag.length-1;i>0;i--){
+        const j=Math.floor(Math.random()*(i+1));[fxBag[i],fxBag[j]]=[fxBag[j],fxBag[i]];
+      }
+    }
+  }
+  lastFx=fxBag.shift();return lastFx;
+}
 function nextRecipe(){
   if(recipeBag.length===0){
     recipeBag=[...recipeIds];
@@ -218,11 +239,11 @@ async function doHatch() {
   const previousDna=rendered?.dna||null;
   if(visual.bug)visual.newEgg();
   visual.setDna(null);
-  ui.stage.textContent='HATCHING…';setStatus('MUTATING / ECHOING YOUR VOICE…');syncUI();
+  ui.stage.textContent='HATCHING…';setStatus('MUTATING YOUR VOICE…');syncUI();
   // 大きな同期処理の前に画面を少なくとも1フレーム描画する。
   await new Promise(resolve=>requestAnimationFrame(()=>setTimeout(resolve,0)));
   try {
-    const next=hatch(original,newSeed(),nextRecipe());
+    const next=hatch(original,newSeed(),nextRecipe(),nextFx());
     // 波形生成後に短い孵化アニメーションを表示。音声加工への影響は与えない。
     visual.setMode('hatching');
     await new Promise(resolve=>setTimeout(resolve,410));

@@ -1,6 +1,6 @@
 import {applyStepMutations,applyMovingPan,applyToyDelay,planToyMusic,renderToyMusic,duckSynthAgainstVoice} from './music-fx.js';
 /**
- * LITTLE BUGS v1.1 — MUTANT MOTION (TRANSIENT-SAFE REPEAT)
+ * LITTLE BUGS v1.1.3 — CONTRAST MUTATIONS / TRANSIENT-SAFE REPEAT
  *
  * 設計原則：短い声をドラム用の極小断片に分解するのではなく、
  * 先に息継ぎ・無音・発音のまとまりからフレーズを抽出する。
@@ -191,6 +191,17 @@ export function estimateVoicePitch(input,analysis){
   return Math.round(mid*10)/10;
 }
 
+// 音声の時間構成（レシピ）と音色の性格（FX）を分離する。
+// エコーを全パターンの最後に掛けると、違うレシピでも同じ音に聴こえる。
+// DRY系を過半数にして、空間の余白があるエイリアン声を意図的に増やす。
+export const FX_IDENTITIES=[
+  {id:'ALIEN',weight:24,tag:'HIGH SPEED / DRY'},
+  {id:'CUTUP',weight:19,tag:'RHYTHMIC REPEAT'},
+  {id:'FILTER',weight:17,tag:'FILTER MOTION'},
+  {id:'CRUSH',weight:17,tag:'PIXEL DECAY'},
+  {id:'CRYSTAL',weight:14,tag:'PITCHED SPARKS'},
+  {id:'ECHO',weight:9,tag:'SPATIAL ECHO'},
+];
 const RECIPES=[
   {id:'PHRASE',tag:'SHIFTED SPEECH',weight:20},
   {id:'MANTRA',tag:'CHANT MACHINE',weight:20},
@@ -203,8 +214,11 @@ export function makeDna(seed){
   let value=rng()*100;let recipe=RECIPES[0];
   for(const candidate of RECIPES){value-=candidate.weight;if(value<0){recipe=candidate;break;}}
   const bpm=Math.round(random(rng,118,164));
+  const fxRandom=mulberry32((seed^0x9E3779B9)>>>0);
+  let fxValue=fxRandom()*100, fx=FX_IDENTITIES[0];
+  for(const item of FX_IDENTITIES){fxValue-=item.weight;if(fxValue<0){fx=item;break;}}
   return {...recipe,seed:seed>>>0,sprite:(rng()*0xFFFFFFFF)>>>0,bpm,
-    bugEnergy:random(rng,.75,1.34)};
+    fxIdentity:fx.id, fxTag:fx.tag,bugEnergy:random(rng,.75,1.34)};
 }
 function voiceSample(data,x){
   const k=Math.floor(x),f=x-k;
@@ -264,12 +278,111 @@ function paste(out,input,e){
 }
 
 /**
+ * Bugの音響性格ごとに、異なる演奏と音色を与える。
+ * 原音の声を丸ごと加工し続けるのではなく、必要な区間だけ置換する。
+ * 全ての変更は一定の種から決まり、同じBugのWAVを再現できる。
+ */
+function duckForSolo(layer,start,duration,amount){
+  const first=Math.max(0,Math.floor(start*RATE));
+  const last=Math.min(layer.left.length,Math.floor((start+duration)*RATE));
+  const edge=Math.min(Math.floor(RATE*.023),Math.floor((last-first)/4));
+  for(let i=first;i<last;i++){
+    const local=i-first;
+    const fade=clamp(Math.min(local/Math.max(1,edge),(last-1-i)/Math.max(1,edge)),0,1);
+    const g=1-amount*fade;
+    layer.left[i]*=g;layer.right[i]*=g;
+  }
+}
+/** テープ倍速で声の音程まで上昇させ、長い残響を作らない小さな異星人。 */
+function addAlienPhrases(layer,input,analysis,dna,cell){
+  const rng=mulberry32(dna.seed^0xA1E98);
+  const phrases=analysis.phrases;
+  if(!phrases.length)return 0;
+  const count=3 + (dna.seed%2);
+  for(let j=0;j<count;j++){
+    const src=phrases[j%phrases.length];
+    const len=Math.min(src.len,random(rng,.42,1.0));
+    if(len<.13)continue;
+    const speed=random(rng,1.52,2.02);
+    const duration=len/speed;
+    const bar=[0,1,2,3][j];
+    const start=bar*cell+(j%2?.73:.20)*60/dna.bpm;
+    // 変異声が鳴る時、元のフレーズの重なりを減らす。
+    duckForSolo(layer,start,duration,.81);
+    paste(layer,input,{time:start,src:{start:src.start,len},duration,
+      style:'speed',gain:random(rng,.83,1.04),filter:random(rng,5100,8200),
+      pan:j%2?.24:-.21});
+    layer.events.push({time:start,end:start+duration,duration,gain:.8,style:'speed'});
+  }
+  return count;
+}
+/** タイムストレッチによる上方向の声を短く返す。長いディレイは使わない。 */
+function addCrystalPhrases(layer,input,analysis,dna,cell){
+  const phrases=analysis.phrases;
+  if(!phrases.length)return 0;
+  const rng=mulberry32(dna.seed^0xCBF124);
+  let hits=0;
+  for(const bar of [0,2,3]){
+    const src=phrases[bar%phrases.length];
+    const len=Math.min(.34,Math.max(.16,src.len*.46));
+    const fragment={start:src.start+Math.max(0,src.len-len),len};
+    const start=bar*cell+cell*.48;
+    const count=bar===2?3:2;
+    for(let j=0;j<count;j++){
+      const at=start+j*60/dna.bpm*(bar===2?.34:.50);
+      if(at+len>=layer.left.length/RATE-.05)continue;
+      paste(layer,input,{time:at,src:fragment,duration:len,
+        style:j===0&&bar===3?'reverse':'pitch',pitch:[5,9,12][j],
+        filter:random(rng,3900,6200),gain:.36*Math.pow(.67,j),pan:j%2?.36:-.32});
+      hits++;
+    }
+  }
+  return hits;
+}
+/** 量子化＋サンプルホールド。音のある区間だけに作用し、急な境界はフェード。 */
+export function applySelectiveCrush(layer,dna,events,rate=RATE){
+  const rng=mulberry32(dna.seed^0x5A4E1);
+  const sources=[layer.left.slice(),layer.right.slice()];
+  const candidates=(events||[]).filter(e=>e.duration>=.24&&e.gain>=.38);
+  if(!candidates.length)return 0;
+  let hits=0;
+  const bars=layer.left.length/rate/4;
+  for(let bar=0;bar<4;bar++){
+    const local=candidates.filter(e=>e.time<bars*(bar+1)&&e.end>bars*bar);
+    if(!local.length)continue;
+    const e=local[Math.floor(rng()*local.length)];
+    const start=Math.max(bars*bar+.04,e.time+.035);
+    const duration=Math.min(random(rng,.28,.68),e.end-start, bars*(bar+1)-start-.06);
+    if(duration<.12)continue;
+    const begin=Math.floor(start*rate),end=Math.min(layer.left.length,Math.floor((start+duration)*rate));
+    const bitDepth=Math.floor(random(rng,5,10));
+    const levels=Math.pow(2,bitDepth-1);
+    const holdSamples=Math.floor(random(rng,4,12));
+    const wet=random(rng,.65,.83),edge=Math.max(1,Math.round(Math.min(.018,duration*.20)*rate));
+    for(let c=0;c<2;c++){
+      const src=sources[c],target=c?layer.right:layer.left;
+      let low=0,held=0;
+      const alpha=1-Math.exp(-2*Math.PI*5000/rate);
+      for(let i=begin;i<end;i++){
+        const localSample=i-begin;
+        if(localSample%holdSamples===0)held=Math.round(src[i]*levels)/levels;
+        low+=(held-low)*alpha;
+        const transition=clamp(Math.min(localSample/edge,(end-1-i)/edge),0,1);
+        target[i]=mix(src[i],low,transition*wet);
+      }
+    }
+    hits++;
+  }
+  return hits;
+}
+
+/**
  * BPMに同期した2-pole SVF の可変ローパス＋共振帯域。
  * FilterFreakの「リズム/エンベロープ・フォロワーの思想」を参照した独立DSP。
  * 実製品のアルゴリズムや音色を再現するものではない。
  * 8ステップのフィルター開閉がカットアップにグルーヴを与える。
  */
-export function applyRhythmicFilter(layer,dna,rng){
+export function applyRhythmicFilter(layer,dna,rng,wetOverride=null){
   const beat=60/dna.bpm,n=layer.left.length;
   const pattern=pick(rng,[
     [.80,.34,.60,.45,.90,.32,.55,.40],
@@ -277,7 +390,7 @@ export function applyRhythmicFilter(layer,dna,rng){
     [.30,.36,.85,.45,.34,.80,.60,.92],
     [.84,.23,.66,.38,.72,.26,.58,.91],
   ]);
-  const wet=dna.id==='BROKEN'?.50:dna.id==='CHOIR'?.27:.39;
+  const wet=wetOverride??(dna.id==='BROKEN'?.50:dna.id==='CHOIR'?.27:.39);
   const q=dna.id==='BROKEN'?1.0:.73;
   const base=pick(rng,[680,900,1150,1450]);
   const range=pick(rng,[1900,2700,3350,4250]);
@@ -562,11 +675,46 @@ function buildVoice(input,analysis,dna,rng,frames,cell,voicePitch){
       }
     }
   }
-  // 変形の後でテンポ同期の動的フィルターとマルチタップ・ディレイを実行。
-  // 声のカットアップとエフェクトが同じ時間グリッドを共有する。
-  out.effectActions=applyStepMutations(out,dna,dna.seed^0x61B9,out.events,RATE);
-  out.panMode=applyMovingPan(out,dna,dna.seed^0x1A981,out.events,RATE);
-  out.echoMode=applyToyDelay(out,dna,dna.seed^0xEC40,RATE);
+  // v1.1.3: 全Bugに同じEchoを重ねない。FXの「主役」を一つだけ選ぶ。
+  // レシピは声の配置、identityは加工色を決め、両者の組合せで差が生まれる。
+  out.effectActions=[];
+  out.panMode='CENTER';
+  out.echoMode='NONE';
+  out.fxHits=0;
+  switch(dna.fxIdentity){
+    case 'ALIEN':
+      out.fxHits=addAlienPhrases(out,input,analysis,dna,cell);
+      out.echoMode='DRY-ALIEN';
+      break;
+    case 'CUTUP':
+      out.effectActions=applyStepMutations(out,dna,dna.seed^0x61B9,out.events,RATE,
+        {density:2, types:['stutter','reverse','half','gate'],intensity:.77});
+      out.fxHits=out.effectActions.length;
+      out.echoMode='NO-ECHO';
+      break;
+    case 'FILTER':
+      applyRhythmicFilter(out,dna,mulberry32(dna.seed^0x731C),.81);
+      out.panMode=applyMovingPan(out,dna,dna.seed^0x1A981,out.events,RATE);
+      out.echoMode='FILTER-ONLY';
+      out.fxHits=8;
+      break;
+    case 'CRUSH':
+      out.fxHits=applySelectiveCrush(out,dna,out.events,RATE);
+      out.echoMode='DRY-CRUSH';
+      break;
+    case 'CRYSTAL':
+      out.fxHits=addCrystalPhrases(out,input,analysis,dna,cell);
+      out.panMode=applyMovingPan(out,dna,dna.seed^0x1A981,out.events,RATE);
+      out.echoMode='PITCH-SPARKS';
+      break;
+    case 'ECHO':
+    default:
+      out.effectActions=applyStepMutations(out,dna,dna.seed^0x61B9,out.events,RATE,
+        {density:1,intensity:.39});
+      out.panMode=applyMovingPan(out,dna,dna.seed^0x1A981,out.events,RATE);
+      out.echoMode=applyToyDelay(out,dna,dna.seed^0xEC40,RATE);
+      out.fxHits=out.effectActions.length;
+  }
   return out;
 }
 
@@ -629,10 +777,11 @@ function cutRumble(layer,frequency){
     }
   }
 }
-function normalize(voice,groove){
+function normalize(voice,groove,dna){
   cutRumble(voice,95);cutRumble(groove,105);
   // 二つの音源に同じ距離感を与える。GROOVEは短く、声は語句の輪郭を優先。
-  shortRoom(voice,60/(voice.bpm||125),.035);
+  // DRY性格では短いルーム成分すら減らし、声の余白を保つ。
+  shortRoom(voice,60/(voice.bpm||125),dna.fxIdentity==='ECHO'?.035:.012);
   shortRoom(groove,60/(voice.bpm||125),.035);
 
   const v=info(voice),g=info(groove);
@@ -662,12 +811,16 @@ function normalize(voice,groove){
     }
   }
 }
-export function hatch(input,seed,forcedRecipe=null){
+export function hatch(input,seed,forcedRecipe=null,forcedFx=null){
   if(!input?.data?.length||!(input.sampleRate>0))throw Error('No recorded audio.');
   const dna=makeDna(seed),analysis=analyzeVoice(input);
   if(forcedRecipe && RECIPES.some(r=>r.id===forcedRecipe)){
     const selected=RECIPES.find(r=>r.id===forcedRecipe);
     dna.id=selected.id;dna.tag=selected.tag;
+  }
+  if(forcedFx && FX_IDENTITIES.some(f=>f.id===forcedFx)){
+    const chosen=FX_IDENTITIES.find(f=>f.id===forcedFx);
+    dna.fxIdentity=chosen.id;dna.fxTag=chosen.tag;
   }
   const primary=analysis.phrases[0];
   const phraseLength=primary?.len??.8;
@@ -680,12 +833,12 @@ export function hatch(input,seed,forcedRecipe=null){
   const voice=buildVoice(input,analysis,dna,mulberry32(seed^0xB01234),frames,cell,basePitch);
   const groove=buildGroove(input,analysis,dna,mulberry32(seed^0x5A5501),frames,cell,voice,basePitch);
   voice.bpm=dna.bpm;
-  normalize(voice,groove);
+  normalize(voice,groove,dna);
   return {voice,groove,sampleRate:RATE,duration:frames/RATE,dna:{...dna,seconds:frames/RATE,cell},
     analysis:{phraseCount:analysis.phrases.length,fragmentCount:analysis.fragments.length,
       pitchHz:basePitch,grooveHits:groove.events.length,cutUpHits:voice.cutUpHits??0,
       stepFX:voice.effectActions?.length??0,panMode:voice.panMode,echoMode:voice.echoMode,
-      grooveMode:groove.plan?.mode}};
+      grooveMode:groove.plan?.mode,fxIdentity:dna.fxIdentity,fxHits:voice.fxHits}};
 }
 export function mixLayers(song,enabled=true){
   const n=song.voice.left.length,left=new Float32Array(n),right=new Float32Array(n);

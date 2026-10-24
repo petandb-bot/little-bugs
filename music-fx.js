@@ -39,14 +39,14 @@ export function seamlessRepeatSample(source,start,local,cell,overlap){
  * Effectrix 型の短い変異。ただし短い stutter のクリックと反復ピークは抑える。
  * 各処理イベントの開始・終了でも18ms程度の短いフェードを付ける。
  */
-export function applyStepMutations(layer,dna,seed,events,rate=44100){
+export function applyStepMutations(layer,dna,seed,events,rate=44100,opts={}){
  const rng=randomFactory(seed),n=layer.left.length,beat=60/dna.bpm,barDuration=n/rate/4;
  const srcL=layer.left.slice(),srcR=layer.right.slice();
- const effects=['stutter','reverse','half','crush','gate'];
+ const effects=opts.types||['stutter','reverse','half','crush','gate'];
  const actions=[];
  for(let bar=0;bar<4;bar++){
   const active=(events||[]).filter(e=>e.time<barDuration*(bar+1)-.08&&e.end>barDuration*bar+.1&&e.duration>.15);
-  const count=bar===3?2:1;
+  const count=(bar===3?2:1)*(opts.density||1);
   for(let k=0;k<count;k++){
    if(!active.length)continue;
    const e=active[Math.floor(rng()*active.length)];
@@ -56,7 +56,7 @@ export function applyStepMutations(layer,dna,seed,events,rate=44100){
    const begin=Math.max(0,Math.floor(start*rate)),end=Math.min(n,Math.floor((start+duration)*rate));
    if(monoEnergy(srcL,srcR,begin,end)<.0025)continue;
    const type=effects[(bar*3+k+Math.floor(rng()*5))%effects.length];
-   const amount=dna.id==='BROKEN'?.76:dna.id==='CHOIR'?.39:.52;
+   const amount=(dna.id==='BROKEN'?.76:dna.id==='CHOIR'?.39:.52)*(opts.intensity??1);
    const targetCell=Math.round(beat*rate*(type==='half'?.20:.115));
    const cell=Math.max(320,Math.min(targetCell,end-begin));
    const overlap=Math.min(Math.round(rate*.010),Math.floor(cell*.24));

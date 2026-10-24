@@ -1,7 +1,7 @@
 {
-  "name": "LITTLE BUGS — Mutant Motion",
+  "name": "LITTLE BUGS — Sonic Species",
   "short_name": "Little Bugs",
-  "description": "An 8-bit voice toy with moving echoes, rhythmic mutations and small synth melodies.",
+  "description": "An 8-bit voice toy with six sonic identities, mutant creatures and tiny synth melodies.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

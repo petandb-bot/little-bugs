@@ -1,19 +1,21 @@
-# LITTLE BUGS v1.1.2 — Round Egg Parade
+# LITTLE BUGS v1.1.3 — Sonic Species
 
-A tiny voice-to-music toy. Record, hatch, loop, and save.
+A tiny voice-mutation toy for your browser.
 
-## How to use
+## Use
 
 1. Tap **REC**, speak or sing, then **STOP** (up to 12 seconds).
-2. Tap **HATCH** to make a new Bug and musical loop.
-3. Tap **PLAY** to listen. Switch **GROOVE** on or off.
+2. Tap **HATCH** to discover a new Bug and loop. Each hatch changes the vocal arrangement and sonic identity.
+3. Tap **PLAY**. Toggle **GROOVE** for the original toy-synth accompaniment and occasional Toy House variation.
 4. Tap **SAVE** to export a WAV file.
-5. Tap the egg to change its shell, or tap a Bug to surprise it.
+5. Tap an egg to change its shell. Tap a Bug to surprise it.
 
-Eggs come in six rounded shapes and soft shell colors. GROOVE keeps the original toy synth accompaniment, with an occasional brighter, cheap-house-inspired variation. Vocal effects are unchanged.
+## What's new
 
-## Publish on GitHub Pages
+Six contrasting sound identities: dry high-speed alien voice, rhythmic cut-up, moving filter, selective bitcrush, pitched crystal fragments, and rhythmic echo. Echo is no longer applied to every Bug. The established GUI, eggs, animation, and GROOVE are retained.
 
-Upload the unzipped files to the repository root. Under **Settings → Pages**, select **Deploy from a branch**, **main**, **/(root)**, then save. Use the HTTPS site link.
+## GitHub Pages
 
-Audio processing runs locally in your browser. Check microphone access and WAV saving on your phone.
+Upload the unzipped files to the repository root. In **Settings → Pages**, choose **Deploy from a branch**, **main**, **/(root)**, and save. Open the HTTPS Pages URL.
+
+All audio processing happens locally in your browser. iPhone microphone and file sharing require device testing.
