@@ -181,6 +181,46 @@ export function applyToyDelay(layer,dna,seed,rate=44100){
  return mode.name;
 }
 
+/**
+ * 短くクリアなテンポ同期Delay。マルチタップEchoより空間を埋めず、
+ * 発話の切れ目に小さな応答を作る。ドライ音声は一切置換しない。
+ * フィードバックを使わず、二つの固定タップだけでピークの蓄積を防ぐ。
+ */
+export function applyShortDelay(layer,dna,seed,rate=44100){
+ const rng=randomFactory(seed),n=layer.left.length,beat=60/dna.bpm;
+ const modes=[
+  {name:'SHORT-SLAP',taps:[[.25,.19],[.50,.065]]},
+  {name:'SHORT-EIGHTH',taps:[[.50,.18],[1.00,.075]]},
+  {name:'SHORT-DOTTED',taps:[[.75,.20],[1.50,.075]]},
+ ];
+ const mode=modes[Math.floor(rng()*modes.length)];
+ const dryL=layer.left.slice(),dryR=layer.right.slice();
+ const wetL=new Float32Array(n),wetR=new Float32Array(n);
+ const offsets=mode.taps.map(([b,g])=>[Math.max(1,Math.round(b*beat*rate)),g]);
+ // ループ時も拍位置がずれないよう、ディレイ音だけを周期境界で折り返す。
+ for(const [offset,g] of offsets){
+  for(let i=0;i<n;i++){
+   const j=(i-offset+n)%n;
+   const dl=dryL[j],dr=dryR[j];
+   wetL[i]+=g*(dl*.84+dr*.16);
+   wetR[i]+=g*(dr*.84+dl*.16);
+  }
+ }
+ const hp=1-Math.exp(-TAU*260/rate),lp=1-Math.exp(-TAU*4800/rate);
+ let bassL=0,bassR=0,topL=0,topR=0,env=0;
+ const rise=1-Math.exp(-1/(rate*.012)),fall=1-Math.exp(-1/(rate*.095));
+ for(let i=0;i<n;i++){
+  bassL+=hp*(wetL[i]-bassL);bassR+=hp*(wetR[i]-bassR);
+  topL+=lp*((wetL[i]-bassL)-topL);topR+=lp*((wetR[i]-bassR)-topR);
+  const dryLevel=Math.max(Math.abs(dryL[i]),Math.abs(dryR[i]));
+  env+=(dryLevel>env?rise:fall)*(dryLevel-env);
+  const duck=clamp(1-env*2.2,.58,1);
+  layer.left[i]+=topL*duck;
+  layer.right[i]+=topR*duck;
+ }
+ return mode.name;
+}
+
 const midiToHz=m=>440*Math.pow(2,(m-69)/12);
 const toMidi=f=>69+12*Math.log2(f/440);
 function addNote(out,time,duration,frequency,volume,kind,pan,rate,rng){

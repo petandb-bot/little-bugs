@@ -55,7 +55,7 @@ for(const [id,s] of seeds){
   assert(result.groove.events.some(x=>x.kind==='pluck') && result.groove.events.some(x=>x.kind==='pad'),'Groove melodic and harmonic');
   assert(result.analysis.fxHits>=0,'FX identity report present');
   if(['ECHO','CUTUP'].includes(result.analysis.fxIdentity))assert(result.analysis.stepFX>=1,'Rhythmic mutations scheduled for the corresponding identities');
-  assert(['DRY-ALIEN','NO-ECHO','FILTER-ONLY','DRY-CRUSH','PITCH-SPARKS','PING-PONG','DUB-SKIP','WOBBLE-TAPE','GHOST-TAPS'].includes(result.analysis.echoMode));
+  assert(['DRY-ALIEN','NO-ECHO','FILTER-ONLY','DRY-CRUSH','PITCH-SPARKS','PING-PONG','DUB-SKIP','WOBBLE-TAPE','GHOST-TAPS','SHORT-SLAP','SHORT-EIGHTH','SHORT-DOTTED'].includes(result.analysis.echoMode));
   assert(['CENTER','orbit','step','trigger'].includes(result.analysis.panMode));
 
   assert.equal(hash(result.voice.left),hash(same.voice.left),'Deterministic voice per seed');

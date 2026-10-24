@@ -3,7 +3,7 @@ import {BugVisual} from './visual.js';
 import {bugName} from './bug-names.js';
 
 /**
- * LITTLE BUGS v1.1.3 — six distinct sonic identities, existing GUI and groove preserved
+ * LITTLE BUGS v1.1.4 — six distinct sonic identities, existing GUI and groove preserved
  *
  * データは端末上のメモリーにのみ保持します。
  * iOS Safari の MediaRecorder は MP4/AAC を使う場合があるため、

@@ -1,6 +1,6 @@
-import {applyStepMutations,applyMovingPan,applyToyDelay,planToyMusic,renderToyMusic,duckSynthAgainstVoice} from './music-fx.js';
+import {applyStepMutations,applyMovingPan,applyToyDelay,applyShortDelay,planToyMusic,renderToyMusic,duckSynthAgainstVoice} from './music-fx.js';
 /**
- * LITTLE BUGS v1.1.3 — CONTRAST MUTATIONS / TRANSIENT-SAFE REPEAT
+ * LITTLE BUGS v1.1.4 — DYNAMICS & DELAY POLISH
  *
  * 設計原則：短い声をドラム用の極小断片に分解するのではなく、
  * 先に息継ぎ・無音・発音のまとまりからフレーズを抽出する。
@@ -342,33 +342,49 @@ function addCrystalPhrases(layer,input,analysis,dna,cell){
 /** 量子化＋サンプルホールド。音のある区間だけに作用し、急な境界はフェード。 */
 export function applySelectiveCrush(layer,dna,events,rate=RATE){
   const rng=mulberry32(dna.seed^0x5A4E1);
-  const sources=[layer.left.slice(),layer.right.slice()];
+  const original=[layer.left.slice(),layer.right.slice()];
   const candidates=(events||[]).filter(e=>e.duration>=.24&&e.gain>=.38);
   if(!candidates.length)return 0;
   let hits=0;
-  const bars=layer.left.length/rate/4;
+  const barLength=layer.left.length/rate/4;
   for(let bar=0;bar<4;bar++){
-    const local=candidates.filter(e=>e.time<bars*(bar+1)&&e.end>bars*bar);
+    const local=candidates.filter(e=>e.time<barLength*(bar+1)&&e.end>barLength*bar);
     if(!local.length)continue;
     const e=local[Math.floor(rng()*local.length)];
-    const start=Math.max(bars*bar+.04,e.time+.035);
-    const duration=Math.min(random(rng,.28,.68),e.end-start, bars*(bar+1)-start-.06);
+    const start=Math.max(barLength*bar+.04,e.time+.035);
+    const duration=Math.min(random(rng,.28,.68),e.end-start,barLength*(bar+1)-start-.06);
     if(duration<.12)continue;
     const begin=Math.floor(start*rate),end=Math.min(layer.left.length,Math.floor((start+duration)*rate));
-    const bitDepth=Math.floor(random(rng,5,10));
-    const levels=Math.pow(2,bitDepth-1);
-    const holdSamples=Math.floor(random(rng,4,12));
-    const wet=random(rng,.65,.83),edge=Math.max(1,Math.round(Math.min(.018,duration*.20)*rate));
-    for(let c=0;c<2;c++){
-      const src=sources[c],target=c?layer.right:layer.left;
-      let low=0,held=0;
-      const alpha=1-Math.exp(-2*Math.PI*5000/rate);
-      for(let i=begin;i<end;i++){
-        const localSample=i-begin;
-        if(localSample%holdSamples===0)held=Math.round(src[i]*levels)/levels;
-        low+=(held-low)*alpha;
-        const transition=clamp(Math.min(localSample/edge,(end-1-i)/edge),0,1);
-        target[i]=mix(src[i],low,transition*wet);
+    const levels=2**Math.floor(random(rng,6,10));
+    const holdSamples=Math.floor(random(rng,4,11));
+    const wet=random(rng,.57,.76);
+    const edge=Math.max(1,Math.round(Math.min(.026,duration*.22)*rate));
+    const alphaLP=1-Math.exp(-2*Math.PI*4300/rate);
+    const alphaHP=1-Math.exp(-2*Math.PI*135/rate);
+    // 30ms前後のエネルギー追従。粗い量子化による一時的な音圧増大だけを抑える。
+    const powerAlpha=1-Math.exp(-1/(rate*.028));
+    const gainAlpha=1-Math.exp(-1/(rate*.014));
+    const channelState=[0,1].map(()=>({hold:0,lp:0,bass:0,dryPower:.00008,wetPower:.00008,gain:1}));
+    for(let i=begin;i<end;i++){
+      const k=i-begin;
+      const boundary=clamp(Math.min(k/edge,(end-1-i)/edge),0,1);
+      const fade=boundary*boundary*(3-2*boundary);
+      for(let c=0;c<2;c++){
+        const state=channelState[c];
+        const src=original[c],target=c?layer.right:layer.left;
+        const dry=src[i];
+        if(k%holdSamples===0)state.hold=Math.round(dry*levels)/levels;
+        // サンプルホールドの鋭い段差を少し和らげ、DC/低域成分を除く。
+        state.lp+=alphaLP*(state.hold-state.lp);
+        state.bass+=alphaHP*(state.lp-state.bass);
+        const crushed=state.lp-state.bass;
+        // 量子化後のRMSが原音より大きい場合のみ、局所ゲインを徐々に下げる。
+        state.dryPower+=powerAlpha*(dry*dry-state.dryPower);
+        state.wetPower+=powerAlpha*(crushed*crushed-state.wetPower);
+        const ratio=Math.sqrt((state.dryPower+.00008)/(state.wetPower+.00008));
+        const targetGain=clamp(ratio*1.08,.54,1);
+        state.gain+=gainAlpha*(targetGain-state.gain);
+        target[i]=mix(dry,crushed*state.gain,wet*fade);
       }
     }
     hits++;
@@ -712,7 +728,12 @@ function buildVoice(input,analysis,dna,rng,frames,cell,voicePitch){
       out.effectActions=applyStepMutations(out,dna,dna.seed^0x61B9,out.events,RATE,
         {density:1,intensity:.39});
       out.panMode=applyMovingPan(out,dna,dna.seed^0x1A981,out.events,RATE);
-      out.echoMode=applyToyDelay(out,dna,dna.seed^0xEC40,RATE);
+      // Echoが毎回濃く聴こえないよう、約2/3は短いドライ寄りのDelayに分岐。
+      // FXタイプの追加ではなく、従来ECHO内部の質感の選択なので画面は変えない。
+      const echoChoice=mulberry32(dna.seed^0xD31A7)();
+      out.echoMode=echoChoice<.66
+        ? applyShortDelay(out,dna,dna.seed^0xEC40,RATE)
+        : applyToyDelay(out,dna,dna.seed^0xEC40,RATE);
       out.fxHits=out.effectActions.length;
   }
   return out;
